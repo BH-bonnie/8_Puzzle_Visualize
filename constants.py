@@ -1,0 +1,19 @@
+SIZE = 100  
+GRID_SIZE = 3
+WIDTH, HEIGHT = 1000, 800  
+
+# Colors
+ORANGE = "#FFA500"
+PINK = "#FFC0CB"
+LIGHT_BLUE = "#ADD8E6"
+GRAY = "#C8C8C8"
+DARK_BLUE = "#006496"
+WHITE = "#FFFFFF"
+BLACK = "#000000"
+BUTTON_COLOR = "#2ECC71"
+BUTTON_HOVER = "#27AE60"
+RED = "#FF0000"
+
+START_STATE = ((1, 2, 3), (4, 5, 0), (6, 7, 8))
+GOAL_STATE = ((1, 2, 3), (4, 5, 6), (7, 8, 0))
+MOVE_COSTS = {"up": 1, "down": 2, "left": 3, "right": 4}
