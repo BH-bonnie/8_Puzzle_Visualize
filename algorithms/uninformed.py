@@ -20,6 +20,8 @@ def bfs(start, goal):
                 queue.append((neighbor, path + [neighbor], new_cost))
     return None, None, all_paths
 
+
+
 def dfs(start, goal, max_depth=30):
     def dfs_recursive(state, path, visited, depth, cost_so_far, all_paths):
         all_paths.append((path, cost_so_far))

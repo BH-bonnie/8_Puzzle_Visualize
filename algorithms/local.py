@@ -5,7 +5,7 @@ from .utils import get_neighbors, get_move_direction, calculate_costs
 from .informed import heuristic
 from constants import MOVE_COSTS
 
-def hill_climbing(start, goal):
+def simple_hill_climbing(start, goal):
     current = start
     path = [current]
     costs = [0]
@@ -37,62 +37,40 @@ def hill_climbing(start, goal):
     
     return path, costs, all_paths
 
-def stochastic_hill_climbing(start, goal):
+def stochastic_hill_climbing(start, goal, max_iterations=100):
     current = start
     path = [current]
     costs = [0]
     visited = {current}
     all_paths = [(path, 0)]
-    max_iterations = 100
     
     for _ in range(max_iterations):
-        if current == goal:
-            return path, costs, all_paths
         neighbors = [n for n in get_neighbors(current) if n not in visited]
+        
         if not neighbors:
             return None, None, all_paths
+        
         current_h = heuristic(current, goal)
-        improving_neighbors = [(n, heuristic(n, goal)) for n in neighbors if heuristic(n, goal) < current_h]
+        neighbor_evals = [(n, heuristic(n, goal)) for n in neighbors]
+        
+        improving_neighbors = [(n, h) for n, h in neighbor_evals if h < current_h]
         if not improving_neighbors:
             return None, None, all_paths
-        next_state = random.choice(improving_neighbors)[0]
+        
+        next_state, next_h = random.choice(improving_neighbors)
+        
         direction = get_move_direction(current, next_state)
         new_cost = costs[-1] + (MOVE_COSTS[direction] if direction else 0)
-        costs.append(new_cost)
+        costs.append(next_h)  
         current = next_state
         path.append(current)
         visited.add(current)
         all_paths.append((path[:], new_cost))
-    return None, None, all_paths
-
-def simple_hill_climbing(start, goal):
-    current = start
-    path = [current]
-    costs = [0]
-    visited = {current}
-    all_paths = [(path, 0)]
-    
-    while current != goal:
-        neighbors = get_neighbors(current)
-        current_h = heuristic(current, goal)
-        found_better = False
         
-        for neighbor in neighbors:
-            if neighbor not in visited:
-                h = heuristic(neighbor, goal)
-                if h < current_h:
-                    direction = get_move_direction(current, neighbor)
-                    new_cost = costs[-1] + (MOVE_COSTS[direction] if direction else 0)
-                    costs.append(new_cost)
-                    current = neighbor
-                    path.append(current)
-                    visited.add(current)
-                    all_paths.append((path[:], new_cost))
-                    found_better = True
-                    break
-        if not found_better:
+        if current == goal:
             return None, None, all_paths
-    return path, costs, all_paths
+    
+    return None, None, all_paths
 
 def simulated_annealing(start, goal, initial_temperature=1000, cooling_rate=0.995, max_iterations=10000):
     current = start
