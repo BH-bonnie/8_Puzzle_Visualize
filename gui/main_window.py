@@ -8,7 +8,7 @@ from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.nondeterministic import and_or_graph_search
-from algorithms.sensor_based import sensor_search, belief_state_search, no_observation_belief_state_search
+from algorithms.sensor_based import sensor_search, belief_state_search, no_observation_belief_state_search, partially_observable_search
 from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
 from algorithms.utils import generate_random_state
 from algorithms.Reforcement_learning import QLearning
@@ -49,6 +49,7 @@ class MainWindow(tk.Tk):
             "Sensor Search": sensor_search,
             "Belief State Search": self.belief_state_search_adapter,
             "No-Observation Belief State Search": self.no_observation_belief_state_search_adapter,
+            "Partially Observable Search": self.partially_observable_search_adapter,
             "Backtracking": self.adapt_backtracking,
             "AC-3": self.adapt_ac3,
             "Forward Checking": self.adapt_forward_checking,
@@ -132,76 +133,171 @@ class MainWindow(tk.Tk):
             
         return state_path, costs, all_paths
             
+    def partially_observable_search_adapter(self, initial_state, goal_state):
+        try:
+            # Lấy visible part từ ma trận mục tiêu (goal_matrix_entries)
+            visible_state = []
+            for i in range(3):
+                row = []
+                for j in range(3):
+                    value = self.goal_matrix_entries[i][j].get().strip()
+                    if value:
+                        try:
+                            row.append(int(value))
+                        except ValueError:
+                            row.append(None)
+                    else:
+                        row.append(None)
+                visible_state.append(tuple(row))
+
+            # Lấy belief states và goal states từ listbox
+            initial_states = self.get_states_from_listbox(self.belief_listbox)
+            goal_states = self.get_states_from_listbox(self.goal_listbox)
+
+            # Tìm vị trí số 0 trong visible_state
+            sensor_pos = None
+            sensor_value = None
+            for i in range(3):
+                for j in range(3):
+                    if visible_state[i][j] == 0:
+                        sensor_pos = (i, j)
+                        sensor_value = 0
+                        break
+                if sensor_pos:
+                    break
+
+            # Không báo lỗi nếu không có số 0
+            from algorithms.sensor_based import partially_observable_search
+            return partially_observable_search(
+                visible_state,
+                goal_states,
+                sensor_pos,
+                sensor_value
+            )
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Lỗi nhập liệu: {str(e)}")
+            return None, None, []
+    
+    def no_observable_search_adapter(self, initial_state, goal_state):
+        return no_observable_search(initial_state, goal_state)
+    
     def create_widgets(self):
         left_panel = tk.Frame(self, bg=COLORS["surface"])
         left_panel.pack(side=tk.LEFT, padx=20, pady=20)
         
-        # Frame cho belief states
-        self.belief_frame = tk.Frame(left_panel, bg=COLORS["surface"])
-        self.belief_frame.pack(fill="x", pady=5)
+        # Frame cho 2 ma trận nhỏ nhập trạng thái niềm tin và mục tiêu niềm tin
+        self.belief_matrices_frame = tk.Frame(left_panel, bg=COLORS["surface"])
+        self.belief_matrices_frame.pack(fill="x", pady=5)
+        # Ma trận nhỏ bên trái: trạng thái niềm tin
+        belief_matrix_label = tk.Label(self.belief_matrices_frame, text="Trạng thái niềm tin:", bg=COLORS["surface"])
+        apply_style(belief_matrix_label, "label")
+        belief_matrix_label.grid(row=0, column=0, pady=2)
+        self.belief_matrix_entries = []
+        belief_matrix_frame = tk.Frame(self.belief_matrices_frame, bg=COLORS["surface"])
+        belief_matrix_frame.grid(row=1, column=0, padx=5)
+        for i in range(3):
+            row_entries = []
+            for j in range(3):
+                entry = tk.Entry(belief_matrix_frame, width=5, font=('Arial', 12))  # Tăng kích thước ô nhập
+                entry.grid(row=i, column=j, padx=2, pady=2)  # Tăng padding
+                # Bind keyboard events
+                entry.bind('<Return>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'belief'))
+                entry.bind('<Up>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'belief'))
+                entry.bind('<Down>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'belief'))
+                entry.bind('<Left>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'belief'))
+                entry.bind('<Right>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'belief'))
+                row_entries.append(entry)
+            self.belief_matrix_entries.append(row_entries)
+        # Nút lưu trạng thái niềm tin
+        self.save_belief_btn = tk.Button(self.belief_matrices_frame, text="Thêm", command=self.save_belief_state, width=10, font=('Arial', 10))
+        apply_style(self.save_belief_btn, "button")
+        self.save_belief_btn.grid(row=2, column=0, pady=5)
+        # Listbox lưu các trạng thái niềm tin đã nhập
+        self.belief_listbox = tk.Listbox(self.belief_matrices_frame, height=8, width=35, font=('Arial', 10))  # Tăng width để hiển thị đầy đủ dãy số
+        self.belief_listbox.grid(row=3, column=0, pady=5)
+        # Thêm nút xóa trạng thái đã chọn
+        self.delete_belief_btn = tk.Button(self.belief_matrices_frame, text="Xóa", command=self.delete_belief_state, width=10, font=('Arial', 10))
+        apply_style(self.delete_belief_btn, "button")
+        self.delete_belief_btn.grid(row=4, column=0, pady=5)
+
+        # Ma trận nhỏ bên phải: mục tiêu niềm tin (kiêm phần nhìn thấy)
+        goal_matrix_label = tk.Label(self.belief_matrices_frame, text="Mục tiêu niềm tin (kiêm phần nhìn thấy):", bg=COLORS["surface"])
+        apply_style(goal_matrix_label, "label")
+        goal_matrix_label.grid(row=0, column=1, pady=2)
+        self.goal_matrix_entries = []
+        goal_matrix_frame = tk.Frame(self.belief_matrices_frame, bg=COLORS["surface"])
+        goal_matrix_frame.grid(row=1, column=1, padx=5)
+        for i in range(3):
+            row_entries = []
+            for j in range(3):
+                entry = tk.Entry(goal_matrix_frame, width=5, font=('Arial', 12))
+                entry.grid(row=i, column=j, padx=2, pady=2)
+                # Bind keyboard events
+                entry.bind('<Return>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'goal'))
+                entry.bind('<Up>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'goal'))
+                entry.bind('<Down>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'goal'))
+                entry.bind('<Left>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'goal'))
+                entry.bind('<Right>', lambda e, row=i, col=j: self.handle_matrix_keypress(e, row, col, 'goal'))
+                row_entries.append(entry)
+            self.goal_matrix_entries.append(row_entries)
+
+        # Frame chứa các nút
+        button_frame = tk.Frame(self.belief_matrices_frame, bg=COLORS["surface"])
+        button_frame.grid(row=2, column=1, pady=5)
         
-        # Label cho belief states
-        belief_label = tk.Label(self.belief_frame, text="Trạng thái niềm tin ban đầu:", bg=COLORS["surface"])
+        # Nút lưu phần nhìn thấy
+        self.save_visible_btn = tk.Button(button_frame, text="Khóa", command=self.save_visible_part, width=10, font=('Arial', 10))
+        apply_style(self.save_visible_btn, "button")
+        self.save_visible_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Nút lưu mục tiêu niềm tin
+        self.save_goal_btn = tk.Button(button_frame, text="Thêm", command=self.save_goal_state, width=10, font=('Arial', 10))
+        apply_style(self.save_goal_btn, "button")
+        self.save_goal_btn.pack(side=tk.LEFT, padx=5)
+
+        # Listbox lưu các mục tiêu niềm tin đã nhập
+        self.goal_listbox = tk.Listbox(self.belief_matrices_frame, height=8, width=35, font=('Arial', 10))
+        self.goal_listbox.grid(row=3, column=1, pady=5)
+        # Thêm nút xóa mục tiêu đã chọn
+        self.delete_goal_btn = tk.Button(self.belief_matrices_frame, text="Xóa", command=self.delete_goal_state, width=10, font=('Arial', 10))
+        apply_style(self.delete_goal_btn, "button")
+        self.delete_goal_btn.grid(row=4, column=1, pady=5)
+
+        # Frame cho belief states và goal belief states (ẩn khi dùng ma trận)
+        self.belief_states_frame = tk.Frame(left_panel, bg=COLORS["surface"])
+        self.belief_states_frame.pack(fill="x", pady=5)
+        self.belief_frame = tk.Frame(self.belief_states_frame, bg=COLORS["surface"])
+        self.belief_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5)
+        belief_label = tk.Label(self.belief_frame, text="Tập trạng thái niềm tin:", bg=COLORS["surface"])
         apply_style(belief_label, "label")
         belief_label.pack(pady=5)
-        
-        # Hướng dẫn nhập belief states
-        belief_help = tk.Label(self.belief_frame, 
-            text="Nhập nhiều trạng thái, mỗi trạng thái trên một dòng.", 
-            bg=COLORS["surface"], justify=tk.LEFT)
+        belief_help = tk.Label(self.belief_frame, text="Nhập nhiều trạng thái, mỗi trạng thái trên một dòng.", bg=COLORS["surface"], justify=tk.LEFT)
         apply_style(belief_help, "label")
         belief_help.pack(pady=5)
-        
-        # Text area cho belief states
         self.belief_text = tk.Text(self.belief_frame, height=5, width=30)
         self.belief_text.pack(pady=5)
-        
-        # Frame cho goal belief states
-        self.goal_belief_frame = tk.Frame(left_panel, bg=COLORS["surface"])
-        self.goal_belief_frame.pack(fill="x", pady=5)
-        
-        # Label cho goal belief states
-        goal_belief_label = tk.Label(self.goal_belief_frame, text="Mục tiêu niềm tin:", bg=COLORS["surface"])
+        self.goal_belief_frame = tk.Frame(self.belief_states_frame, bg=COLORS["surface"])
+        self.goal_belief_frame.pack(side=tk.LEFT, fill="both", expand=True, padx=5)
+        goal_belief_label = tk.Label(self.goal_belief_frame, text="Tập mục tiêu niềm tin:", bg=COLORS["surface"])
         apply_style(goal_belief_label, "label")
         goal_belief_label.pack(pady=5)
-        
-        # Hướng dẫn nhập goal belief states
-        goal_belief_help = tk.Label(self.goal_belief_frame, 
-            text="Nhập nhiều trạng thái mục tiêu, mỗi trạng thái trên một dòng.", 
-            bg=COLORS["surface"], justify=tk.LEFT)
+        goal_belief_help = tk.Label(self.goal_belief_frame, text="Nhập nhiều trạng thái mục tiêu, mỗi trạng thái trên một dòng.", bg=COLORS["surface"], justify=tk.LEFT)
         apply_style(goal_belief_help, "label")
         goal_belief_help.pack(pady=5)
-        
-        # Text area cho goal belief states
         self.goal_belief_text = tk.Text(self.goal_belief_frame, height=5, width=30)
         self.goal_belief_text.pack(pady=5)
-        
-        # Nút áp dụng belief states
-        self.apply_belief_button = tk.Button(
-            self.belief_frame,
-            text="Áp dụng Belief States",
-            command=self.apply_belief_states
-        )
-        apply_style(self.apply_belief_button, "button")
-        self.apply_belief_button.pack(pady=5)
-        
-        # Ẩn belief frames ban đầu
-        self.belief_frame.pack_forget()
-        self.goal_belief_frame.pack_forget()
-        self.apply_belief_button.pack_forget()
-        
+        # Ẩn các frame ban đầu
+        self.belief_states_frame.pack_forget()
+        self.belief_matrices_frame.pack_forget()
         # Frame cho input thông thường
         self.input_frame = tk.Frame(left_panel, bg=COLORS["surface"])
         self.input_frame.pack(fill="x", pady=5)
-        
         input_label = tk.Label(self.input_frame, text="Enter 1D array (0-8):", bg=COLORS["surface"])
         apply_style(input_label, "label")
         input_label.pack(side=tk.LEFT, padx=5)
-        
         self.array_input = tk.Entry(self.input_frame, width=15)
         self.array_input.pack(side=tk.LEFT, padx=5)
         self.array_input.insert(0, "2,6,5,0,8,7,4,3,1")  
-        
         apply_button = tk.Button(
             self.input_frame,
             text="Apply Array",
@@ -209,98 +305,125 @@ class MainWindow(tk.Tk):
         )
         apply_style(apply_button, "button")
         apply_button.pack(side=tk.LEFT, padx=5)
-        
-        random_button = tk.Button(
-            left_panel,
-            text="Randomize Initial State",
-            command=self.randomize_state
-        )
-        apply_style(random_button, "secondary_button")
-        random_button.pack(pady=10)
-        
         self.puzzle_frame = PuzzleFrame(left_panel)
         self.puzzle_frame.pack(pady=10)
         self.puzzle_frame.draw_state(self.start_state)
-        
         self.control_panel = ControlPanel(self, self.solve, self.navigate, self.play_pause)
         self.control_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        # Khởi tạo belief states
-        self.initial_beliefs = []
-        self.goal_beliefs = []
-        self.apply_belief_states()
-        
-        # Thêm callback cho việc thay đổi thuật toán
         self.control_panel.selected_algorithm.trace_add("write", self.on_algorithm_change)
     
+    def save_belief_state(self):
+        # Kiểm tra ma trận có đủ số từ 0-8 không
+        numbers = set()
+        for i in range(3):
+            for j in range(3):
+                value = self.belief_matrix_entries[i][j].get().strip()
+                if value and value.isdigit():
+                    num = int(value)
+                    if 0 <= num <= 8:
+                        numbers.add(num)
+        
+        if len(numbers) != 9:
+            messagebox.showerror("Lỗi", "Ma trận phải chứa đủ các số từ 0 đến 8!")
+            return
+            
+        # Lưu trạng thái niềm tin từ ma trận vào listbox
+        state = []
+        for i in range(3):
+            for j in range(3):
+                value = self.belief_matrix_entries[i][j].get().strip()
+                if value:
+                    state.append(value)
+                else:
+                    state.append('None')
+        # Thêm trạng thái mới vào listbox
+        self.belief_listbox.insert('end', ','.join(state))
+        # Xóa nội dung trong ma trận để nhập trạng thái mới
+        self.clear_belief_matrix()
+
+    def save_goal_state(self):
+        # Kiểm tra ma trận có đủ số từ 0-8 không
+        numbers = set()
+        for i in range(3):
+            for j in range(3):
+                value = self.goal_matrix_entries[i][j].get().strip()
+                if value and value.isdigit():
+                    num = int(value)
+                    if 0 <= num <= 8:
+                        numbers.add(num)
+        
+        if len(numbers) != 9:
+            messagebox.showerror("Lỗi", "Ma trận phải chứa đủ các số từ 0 đến 8!")
+            return
+            
+        # Lưu mục tiêu niềm tin từ ma trận vào listbox
+        state = []
+        for i in range(3):
+            for j in range(3):
+                value = self.goal_matrix_entries[i][j].get().strip()
+                if value:
+                    state.append(value)
+                else:
+                    state.append('None')
+        # Thêm trạng thái mới vào listbox
+        self.goal_listbox.insert('end', ','.join(state))
+        
+        # Xóa nội dung trong ma trận nhưng giữ lại các ô đã bị khóa
+        for i in range(3):
+            for j in range(3):
+                if self.goal_matrix_entries[i][j].cget('state') != 'disabled':
+                    self.goal_matrix_entries[i][j].delete(0, tk.END)
+                    self.goal_matrix_entries[i][j].config(state='normal')
+        
+        # Focus vào ô đầu tiên có thể nhập được
+        for i in range(3):
+            for j in range(3):
+                if self.goal_matrix_entries[i][j].cget('state') == 'normal':
+                    self.goal_matrix_entries[i][j].focus_set()
+                    return
+
+    def clear_belief_matrix(self):
+        # Xóa nội dung trong ma trận belief
+        for i in range(3):
+            for j in range(3):
+                self.belief_matrix_entries[i][j].delete(0, tk.END)
+        # Focus vào ô đầu tiên
+        self.belief_matrix_entries[0][0].focus_set()
+
+    def clear_goal_matrix(self):
+        """Xóa nội dung trong ma trận goal và mở khóa tất cả các ô"""
+        for i in range(3):
+            for j in range(3):
+                self.goal_matrix_entries[i][j].config(state='normal')  # Mở khóa tất cả các ô
+                self.goal_matrix_entries[i][j].delete(0, tk.END)
+        # Enable lại nút Khóa khi reset ma trận
+        self.save_visible_btn.config(state='normal')
+        # Focus vào ô đầu tiên
+        self.goal_matrix_entries[0][0].focus_set()
+
+    def delete_belief_state(self):
+        # Xóa trạng thái đã chọn trong listbox
+        selected = self.belief_listbox.curselection()
+        if selected:
+            self.belief_listbox.delete(selected)
+
+    def delete_goal_state(self):
+        # Xóa mục tiêu đã chọn trong listbox
+        selected = self.goal_listbox.curselection()
+        if selected:
+            self.goal_listbox.delete(selected)
+
     def on_algorithm_change(self, *args):
         algorithm_name = self.control_panel.selected_algorithm.get()
-        if algorithm_name == "No-Observation Belief State Search":
-            self.belief_frame.pack(fill="x", pady=5)
-            self.goal_belief_frame.pack(fill="x", pady=5)
-            self.apply_belief_button.pack(pady=5)
+        sensor_algorithms = ["Sensor Search", "Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]
+        # Luôn ẩn text area
+        self.belief_states_frame.pack_forget()
+        if algorithm_name in sensor_algorithms:
+            self.belief_matrices_frame.pack(fill="x", pady=5)
             self.input_frame.pack_forget()
-        elif algorithm_name in ["Sensor Search", "Belief State Search"]:
-            self.belief_frame.pack_forget()
-            self.goal_belief_frame.pack_forget()
-            self.apply_belief_button.pack_forget()
-            self.input_frame.pack(fill="x", pady=5)
         else:
-            self.belief_frame.pack_forget()
-            self.goal_belief_frame.pack_forget()
-            self.apply_belief_button.pack_forget()
+            self.belief_matrices_frame.pack_forget()
             self.input_frame.pack(fill="x", pady=5)
-    
-    def apply_belief_states(self):
-        try:
-            # Đọc và xử lý initial belief states
-            initial_text = self.belief_text.get("1.0", tk.END).strip()
-            initial_states = []
-            for line in initial_text.split('\n'):
-                if line.strip():
-                    values = [int(x.strip()) for x in line.split(',')]
-                    if len(values) != 9:
-                        raise ValueError("Mỗi state phải có đúng 9 số")
-                    if sorted(values) != list(range(9)):
-                        raise ValueError("Mỗi state phải chứa các số từ 0-8")
-                    state = (
-                        tuple(values[0:3]),
-                        tuple(values[3:6]),
-                        tuple(values[6:9])
-                    )
-                    initial_states.append(state)
-            
-            # Đọc và xử lý goal belief states
-            goal_text = self.goal_belief_text.get("1.0", tk.END).strip()
-            goal_states = []
-            for line in goal_text.split('\n'):
-                if line.strip():
-                    values = [int(x.strip()) for x in line.split(',')]
-                    if len(values) != 9:
-                        raise ValueError("Mỗi state phải có đúng 9 số")
-                    if sorted(values) != list(range(9)):
-                        raise ValueError("Mỗi state phải chứa các số từ 0-8")
-                    state = (
-                        tuple(values[0:3]),
-                        tuple(values[3:6]),
-                        tuple(values[6:9])
-                    )
-                    goal_states.append(state)
-            
-            # Cập nhật belief states
-            self.initial_beliefs = initial_states
-            self.goal_beliefs = goal_states
-            
-            # Cập nhật trạng thái hiển thị
-            if initial_states:
-                self.start_state = initial_states[0]
-                self.puzzle_frame.draw_state(self.start_state)
-            
-            self.reset_solution_data()
-            self.control_panel.status_msg.config(text="Belief states đã được cập nhật!")
-            
-        except Exception as e:
-            messagebox.showerror("Input Error", f"Lỗi khi nhập belief states: {str(e)}")
     
     def apply_array_input(self):
         try:
@@ -358,28 +481,25 @@ class MainWindow(tk.Tk):
         self.control_panel.update_info(info)
         self.control_panel.update_paths([])
     
-    def randomize_state(self):
-        self.start_state = generate_random_state()
-        self.puzzle_frame.draw_state(self.start_state)
-        self.reset_solution_data()
-        self.control_panel.status_msg.config(text="Initial state randomized. Ready to solve.")
-        
-        flat_state = [num for row in self.start_state for num in row]
-        self.array_input.delete(0, tk.END)
-        self.array_input.insert(0, ",".join(str(num) for num in flat_state))
-        
     def solve(self, algorithm_name):
+        # Nếu có trạng thái niềm tin, tự động hiển thị trạng thái đầu tiên lên ma trận phần nhìn thấy
+        initial_text = self.belief_text.get("1.0", tk.END).strip()
+        if initial_text:
+            first_line = initial_text.split('\n')[0]
+            if first_line.strip():
+                values = [int(x.strip()) for x in first_line.split(',')]
+                if len(values) == 9:
+                    for i in range(3):
+                        for j in range(3):
+                            self.goal_matrix_entries[i][j].delete(0, tk.END)
+                            self.goal_matrix_entries[i][j].insert(0, str(values[i*3+j]))
         # Kiểm tra và hiển thị/ẩn belief states dựa trên thuật toán
-        if algorithm_name in ["Sensor Search", "Belief State Search", "No-Observation Belief State Search"]:
-            self.belief_frame.pack(fill="x", pady=5)
-            self.goal_belief_frame.pack(fill="x", pady=5)
-            self.apply_belief_button.pack(pady=5)
-            self.input_frame.pack_forget()  # Ẩn phần input array
-        else:
-            self.belief_frame.pack_forget()
-            self.goal_belief_frame.pack_forget()
-            self.apply_belief_button.pack_forget()
-            self.input_frame.pack(fill="x", pady=5)  # Hiện phần input array
+        # if algorithm_name in ["Sensor Search", "Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]:
+        #     self.belief_matrices_frame.pack(fill="x", pady=5)
+        #     self.belief_states_frame.pack_forget()
+        # else:
+        #     self.belief_matrices_frame.pack_forget()
+        #     self.belief_states_frame.pack(fill="x", pady=5)
             
         self.control_panel.status_msg.config(text=f"Đang giải với thuật toán {algorithm_name}...")
         self.update()  
@@ -522,4 +642,84 @@ class MainWindow(tk.Tk):
                 return None, None, all_paths
         
         return path, costs, all_paths
+
+    def handle_matrix_keypress(self, event, row, col, matrix_type):
+        """Handle keyboard navigation in matrix entries"""
+        entries = self.belief_matrix_entries if matrix_type == 'belief' else self.goal_matrix_entries
+        
+        if event.keysym == 'Return':
+            # Move to next cell or save state if at last cell
+            if col < 2:
+                next_col = col + 1
+                while next_col < 3 and entries[row][next_col].cget('state') == 'disabled':
+                    next_col += 1
+                if next_col < 3:
+                    entries[row][next_col].focus_set()
+            elif row < 2:
+                next_row = row + 1
+                next_col = 0
+                while next_row < 3:
+                    while next_col < 3 and entries[next_row][next_col].cget('state') == 'disabled':
+                        next_col += 1
+                    if next_col < 3:
+                        entries[next_row][next_col].focus_set()
+                        break
+                    next_row += 1
+                    next_col = 0
+            else:
+                # At last cell, save the state
+                if matrix_type == 'belief':
+                    self.save_belief_state()
+                else:
+                    self.save_goal_state()
+                # Focus back to first cell
+                entries[0][0].focus_set()
+                
+        elif event.keysym == 'Up':
+            if row > 0:
+                prev_row = row - 1
+                while prev_row >= 0 and entries[prev_row][col].cget('state') == 'disabled':
+                    prev_row -= 1
+                if prev_row >= 0:
+                    entries[prev_row][col].focus_set()
+                
+        elif event.keysym == 'Down':
+            if row < 2:
+                next_row = row + 1
+                while next_row < 3 and entries[next_row][col].cget('state') == 'disabled':
+                    next_row += 1
+                if next_row < 3:
+                    entries[next_row][col].focus_set()
+                
+        elif event.keysym == 'Left':
+            if col > 0:
+                prev_col = col - 1
+                while prev_col >= 0 and entries[row][prev_col].cget('state') == 'disabled':
+                    prev_col -= 1
+                if prev_col >= 0:
+                    entries[row][prev_col].focus_set()
+                
+        elif event.keysym == 'Right':
+            if col < 2:
+                next_col = col + 1
+                while next_col < 3 and entries[row][next_col].cget('state') == 'disabled':
+                    next_col += 1
+                if next_col < 3:
+                    entries[row][next_col].focus_set()
+
+    def save_visible_part(self):
+        """Lưu phần nhìn thấy và khóa các ô đã nhập số từ 0-8"""
+        # Kiểm tra và lưu các ô đã nhập số từ 0-8
+        for i in range(3):
+            for j in range(3):
+                value = self.goal_matrix_entries[i][j].get().strip()
+                if value and value.isdigit() and 0 <= int(value) <= 8:
+                    # Khóa ô này
+                    self.goal_matrix_entries[i][j].config(state='disabled')
+                else:
+                    # Mở khóa các ô khác
+                    self.goal_matrix_entries[i][j].config(state='normal')
+                    self.goal_matrix_entries[i][j].delete(0, tk.END)
+        # Disable nút Khóa sau khi nhấn
+        self.save_visible_btn.config(state='disabled')
 

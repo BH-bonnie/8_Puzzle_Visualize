@@ -3,6 +3,8 @@ from collections import deque
 from .utils import get_neighbors, get_move_direction, calculate_costs
 from .informed import heuristic
 from constants import MOVE_COSTS
+import tkinter as tk
+from tkinter import messagebox
 
 def sensor_search(start, goal_state, max_steps=500):
     current_state = start
@@ -216,7 +218,6 @@ def result(belief_state, action):
     return tuple(tuple(row) for row in state_list)
 
 def calculate_action_cost(belief_state, action):
-
     return MOVE_COSTS.get(action, 1)
 
 def no_observation_belief_state_search(initial_beliefs, goal_beliefs, max_steps=500):
@@ -287,3 +288,173 @@ def no_observation_belief_state_search(initial_beliefs, goal_beliefs, max_steps=
                 all_paths.append((state_path, new_cost))
     
     return None, None, all_paths
+
+def partially_observable_search(initial_state, goal_state, sensor_pos, sensor_value, max_steps=500):
+    """
+    Implements the partially observable search algorithm for 8-puzzle.
+    
+    Args:
+        initial_state: Initial state of the puzzle
+        goal_state: Goal state of the puzzle
+        sensor_pos: Tuple of (row, col) for sensor position
+        sensor_value: Value observed at sensor position
+        max_steps: Maximum number of steps to search
+        
+    Returns:
+        path: List of states representing the solution path
+        costs: List of costs for each step
+        all_paths: List of all paths explored
+    """
+    # Initialize belief state with all possible states that match sensor value
+    belief_state = set()
+    
+    # If initial_state is a list of states (from listbox), use all of them
+    if isinstance(initial_state, list):
+        for state in initial_state:
+            if isinstance(state, list):
+                state = tuple(tuple(row) for row in state)
+            if state[sensor_pos[0]][sensor_pos[1]] == sensor_value:
+                belief_state.add(state)
+    else:
+        # Single initial state case
+        if isinstance(initial_state, list):
+            initial_state = tuple(tuple(row) for row in initial_state)
+        if initial_state[sensor_pos[0]][sensor_pos[1]] == sensor_value:
+            belief_state.add(initial_state)
+    
+    if not belief_state:
+        return None, None, []
+    
+    # Start with the first state in belief state as the current state
+    current_state = next(iter(belief_state))
+    path = [current_state]
+    costs = [0]
+    visited = {current_state}
+    all_paths = [(path[:], 0)]
+    
+    for _ in range(max_steps):
+        # Check if any state in belief state matches goal
+        if any(state == goal_state for state in belief_state):
+            return path, costs, all_paths
+            
+        # Get common actions for all states in current belief
+        common_actions = set.intersection(*[set(get_possible_actions(state)) for state in belief_state])
+        
+        if not common_actions:
+            break
+            
+        # Choose best action based on heuristic
+        best_action = None
+        best_cost = float('inf')
+        best_new_belief = None
+        
+        for action in common_actions:
+            new_belief = set()
+            for state in belief_state:
+                new_state = result(state, action)
+                # Only keep states that match sensor value
+                if new_state[sensor_pos[0]][sensor_pos[1]] == sensor_value:
+                    new_belief.add(new_state)
+            
+            if new_belief:
+                # Calculate average heuristic value for new belief state
+                avg_h = sum(heuristic(state, goal_state) for state in new_belief) / len(new_belief)
+                action_cost = MOVE_COSTS.get(action, 1)
+                total_cost = avg_h + action_cost
+                
+                if total_cost < best_cost:
+                    best_action = action
+                    best_cost = total_cost
+                    best_new_belief = new_belief
+        
+        if best_new_belief is None:
+            break
+            
+        # Apply best action
+        belief_state = best_new_belief
+        next_state = result(path[-1], best_action)
+        path.append(next_state)
+        
+        new_cost = costs[-1] + MOVE_COSTS.get(best_action, 1)
+        costs.append(new_cost)
+        visited.add(next_state)
+        all_paths.append((path[:], new_cost))
+        
+    return path, costs, all_paths
+
+def get_states_from_listbox(self, listbox):
+    states = []
+    for idx in range(listbox.size()):
+        line = listbox.get(idx)
+        values = [int(x) for x in line.split(',')]
+        state = (
+            tuple(values[0:3]),
+            tuple(values[3:6]),
+            tuple(values[6:9])
+        )
+        states.append(state)
+    return states
+
+def no_observation_belief_state_search_adapter(self, initial_state, goal_state):
+    # Lấy belief states và goal states từ listbox
+    initial_beliefs = self.get_states_from_listbox(self.belief_listbox)
+    goal_beliefs = self.get_states_from_listbox(self.goal_listbox)
+
+    if not initial_beliefs or not goal_beliefs:
+        messagebox.showerror("Lỗi", "Vui lòng nhập đủ trạng thái niềm tin và mục tiêu!")
+        return None, None, []
+
+    # Định dạng lại cho thuật toán
+    initial_beliefs = [set([state]) for state in initial_beliefs]
+    goal_beliefs = [set(goal_beliefs)]
+
+    # Gọi thuật toán
+    from algorithms.sensor_based import no_observation_belief_state_search
+    path, costs, all_paths = no_observation_belief_state_search(initial_beliefs, goal_beliefs)
+    return path, costs, all_paths
+
+def partially_observable_search_adapter(self, initial_state, goal_state):
+    try:
+        # Lấy visible part từ ma trận mục tiêu (goal_matrix_entries)
+        visible_state = []
+        for i in range(3):
+            row = []
+            for j in range(3):
+                value = self.goal_matrix_entries[i][j].get().strip()
+                if value:
+                    try:
+                        row.append(int(value))
+                    except ValueError:
+                        row.append(None)
+                else:
+                    row.append(None)
+            visible_state.append(tuple(row))
+
+        # Lấy belief states và goal states từ listbox
+        initial_states = self.get_states_from_listbox(self.belief_listbox)
+        goal_states = self.get_states_from_listbox(self.goal_listbox)
+
+        # Tìm vị trí số 0 trong visible_state
+        sensor_pos = None
+        for i in range(3):
+            for j in range(3):
+                if visible_state[i][j] == 0:
+                    sensor_pos = (i, j)
+                    break
+            if sensor_pos:
+                break
+
+        if not sensor_pos:
+            messagebox.showerror("Lỗi", "Không tìm thấy số 0 trong phần nhìn thấy!")
+            return None, None, []
+
+        from algorithms.sensor_based import partially_observable_search
+        return partially_observable_search(
+            visible_state,
+            goal_states,
+            sensor_pos,
+            0
+        )
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Lỗi nhập liệu: {str(e)}")
+        return None, None, []

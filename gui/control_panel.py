@@ -231,7 +231,7 @@ class ControlPanel(tk.Frame):
                 self.paths_text.insert(tk.END, "\n")
                 
                 for row in state:
-                    formatted_row = "  ".join(f"{num:2d}" if num != 0 else " _" for num in row)
+                    formatted_row = "  ".join(" _" if num is None or num == 0 else f"{num:2d}" for num in row)
                     self.paths_text.insert(tk.END, f"  {formatted_row}\n")
                 
                 self.paths_text.insert(tk.END, "\n")
