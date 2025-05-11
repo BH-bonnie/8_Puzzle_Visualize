@@ -157,11 +157,28 @@ class MainWindow(tk.Tk):
         if not initial_states or not goal_states:
             messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái niềm tin và một mục tiêu niềm tin!")
             return None, None, []
-
+        selected_belief = initial_states[0]  # Có thể thay bằng logic chọn từ belief_listbox
+        self.start_state = selected_belief  # Cập nhật start_state để hiển thị trên puzzle_frame
+        self.puzzle_frame.draw_state(self.start_state)  # Hiển thị trạng thái niềm tin trên puzzle_frame
         # Gọi hàm partially_observable_search
         path, costs, all_paths = partially_observable_search(visible_state, initial_states, goal_states)
         
+        # Animate the resulting path for clarity
+        if path:
+            for idx, state in enumerate(path):
+                prev = path[idx-1] if idx > 0 else state
+                # draw current step
+                self.puzzle_frame.draw_state(state)
+                # highlight the move from prev→state
+                self.puzzle_frame.show_move(prev, state)
+                # force immediate repaint
+                self.update_idletasks()
+                self.update()
+                # pause so you can actually see it
+                time.sleep(0.4)
+        
         return path, costs, all_paths
+
     def no_observable_search_adapter(self, initial_state, goal_state):
         return no_observable_search(initial_state, goal_state)
     
