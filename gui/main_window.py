@@ -8,7 +8,7 @@ from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.nondeterministic import and_or_graph_search
-from algorithms.sensor_based import sensor_search, belief_state_search
+from algorithms.sensor_based import sensor_search, belief_state_search, no_observation_belief_state_search
 from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
 from algorithms.utils import generate_random_state
 from .theme import COLORS, apply_style
@@ -47,6 +47,7 @@ class MainWindow(tk.Tk):
             "AND-OR Search": and_or_graph_search,
             "Sensor Search": sensor_search,
             "Belief State Search": self.belief_state_search_adapter,
+            "No-Observation Belief State Search": self.no_observation_belief_state_search_adapter,
             "Backtracking": self.adapt_backtracking,
             "AC-3": self.adapt_ac3
         }
@@ -84,24 +85,107 @@ class MainWindow(tk.Tk):
     
     def belief_state_search_adapter(self, initial_state, goal_state):
         return belief_state_search(initial_state, goal_state)
+    
+    def no_observation_belief_state_search_adapter(self, initial_state, goal_state):
+        # Sử dụng belief states đã nhập
+        if not self.initial_beliefs or not self.goal_beliefs:
+            messagebox.showerror("Error", "Vui lòng nhập belief states trước!")
+            return None, None, []
+            
+        # Convert states to tuples for hashing
+        initial_beliefs = [tuple(tuple(row) for row in state) for state in self.initial_beliefs]
+        goal_beliefs = [tuple(tuple(row) for row in state) for state in self.goal_beliefs]
+        
+        # Mỗi trạng thái ban đầu là một belief state riêng biệt
+        initial_beliefs = [set([state]) for state in initial_beliefs]
+        goal_beliefs = [set(goal_beliefs)]  # Tất cả goal states trong một belief state
+        
+        # Run the algorithm
+        path, costs, all_paths = no_observation_belief_state_search(initial_beliefs, goal_beliefs)
+        
+        # If no solution found, return empty results
+        if path is None:
+            return None, None, all_paths
+            
+        # Convert path back to list of states
+        state_path = []
+        for state in path:
+            state_path.append(tuple(tuple(row) for row in state))
+            
+        return state_path, costs, all_paths
             
     def create_widgets(self):
         left_panel = tk.Frame(self, bg=COLORS["surface"])
         left_panel.pack(side=tk.LEFT, padx=20, pady=20)
         
-        input_frame = tk.Frame(left_panel, bg=COLORS["surface"])
-        input_frame.pack(fill="x", pady=5)
+        # Frame cho belief states
+        self.belief_frame = tk.Frame(left_panel, bg=COLORS["surface"])
+        self.belief_frame.pack(fill="x", pady=5)
         
-        input_label = tk.Label(input_frame, text="Enter 1D array (0-8):", bg=COLORS["surface"])
+        # Label cho belief states
+        belief_label = tk.Label(self.belief_frame, text="Trạng thái niềm tin ban đầu:", bg=COLORS["surface"])
+        apply_style(belief_label, "label")
+        belief_label.pack(pady=5)
+        
+        # Hướng dẫn nhập belief states
+        belief_help = tk.Label(self.belief_frame, 
+            text="Nhập nhiều trạng thái, mỗi trạng thái trên một dòng.", 
+            bg=COLORS["surface"], justify=tk.LEFT)
+        apply_style(belief_help, "label")
+        belief_help.pack(pady=5)
+        
+        # Text area cho belief states
+        self.belief_text = tk.Text(self.belief_frame, height=5, width=30)
+        self.belief_text.pack(pady=5)
+        
+        # Frame cho goal belief states
+        self.goal_belief_frame = tk.Frame(left_panel, bg=COLORS["surface"])
+        self.goal_belief_frame.pack(fill="x", pady=5)
+        
+        # Label cho goal belief states
+        goal_belief_label = tk.Label(self.goal_belief_frame, text="Mục tiêu niềm tin:", bg=COLORS["surface"])
+        apply_style(goal_belief_label, "label")
+        goal_belief_label.pack(pady=5)
+        
+        # Hướng dẫn nhập goal belief states
+        goal_belief_help = tk.Label(self.goal_belief_frame, 
+            text="Nhập nhiều trạng thái mục tiêu, mỗi trạng thái trên một dòng.", 
+            bg=COLORS["surface"], justify=tk.LEFT)
+        apply_style(goal_belief_help, "label")
+        goal_belief_help.pack(pady=5)
+        
+        # Text area cho goal belief states
+        self.goal_belief_text = tk.Text(self.goal_belief_frame, height=5, width=30)
+        self.goal_belief_text.pack(pady=5)
+        
+        # Nút áp dụng belief states
+        self.apply_belief_button = tk.Button(
+            self.belief_frame,
+            text="Áp dụng Belief States",
+            command=self.apply_belief_states
+        )
+        apply_style(self.apply_belief_button, "button")
+        self.apply_belief_button.pack(pady=5)
+        
+        # Ẩn belief frames ban đầu
+        self.belief_frame.pack_forget()
+        self.goal_belief_frame.pack_forget()
+        self.apply_belief_button.pack_forget()
+        
+        # Frame cho input thông thường
+        self.input_frame = tk.Frame(left_panel, bg=COLORS["surface"])
+        self.input_frame.pack(fill="x", pady=5)
+        
+        input_label = tk.Label(self.input_frame, text="Enter 1D array (0-8):", bg=COLORS["surface"])
         apply_style(input_label, "label")
         input_label.pack(side=tk.LEFT, padx=5)
         
-        self.array_input = tk.Entry(input_frame, width=15)
+        self.array_input = tk.Entry(self.input_frame, width=15)
         self.array_input.pack(side=tk.LEFT, padx=5)
         self.array_input.insert(0, "2,6,5,0,8,7,4,3,1")  
         
         apply_button = tk.Button(
-            input_frame,
+            self.input_frame,
             text="Apply Array",
             command=self.apply_array_input
         )
@@ -122,6 +206,83 @@ class MainWindow(tk.Tk):
         
         self.control_panel = ControlPanel(self, self.solve, self.navigate, self.play_pause)
         self.control_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Khởi tạo belief states
+        self.initial_beliefs = []
+        self.goal_beliefs = []
+        self.apply_belief_states()
+        
+        # Thêm callback cho việc thay đổi thuật toán
+        self.control_panel.selected_algorithm.trace_add("write", self.on_algorithm_change)
+    
+    def on_algorithm_change(self, *args):
+        algorithm_name = self.control_panel.selected_algorithm.get()
+        if algorithm_name == "No-Observation Belief State Search":
+            self.belief_frame.pack(fill="x", pady=5)
+            self.goal_belief_frame.pack(fill="x", pady=5)
+            self.apply_belief_button.pack(pady=5)
+            self.input_frame.pack_forget()
+        elif algorithm_name in ["Sensor Search", "Belief State Search"]:
+            self.belief_frame.pack_forget()
+            self.goal_belief_frame.pack_forget()
+            self.apply_belief_button.pack_forget()
+            self.input_frame.pack(fill="x", pady=5)
+        else:
+            self.belief_frame.pack_forget()
+            self.goal_belief_frame.pack_forget()
+            self.apply_belief_button.pack_forget()
+            self.input_frame.pack(fill="x", pady=5)
+    
+    def apply_belief_states(self):
+        try:
+            # Đọc và xử lý initial belief states
+            initial_text = self.belief_text.get("1.0", tk.END).strip()
+            initial_states = []
+            for line in initial_text.split('\n'):
+                if line.strip():
+                    values = [int(x.strip()) for x in line.split(',')]
+                    if len(values) != 9:
+                        raise ValueError("Mỗi state phải có đúng 9 số")
+                    if sorted(values) != list(range(9)):
+                        raise ValueError("Mỗi state phải chứa các số từ 0-8")
+                    state = (
+                        tuple(values[0:3]),
+                        tuple(values[3:6]),
+                        tuple(values[6:9])
+                    )
+                    initial_states.append(state)
+            
+            # Đọc và xử lý goal belief states
+            goal_text = self.goal_belief_text.get("1.0", tk.END).strip()
+            goal_states = []
+            for line in goal_text.split('\n'):
+                if line.strip():
+                    values = [int(x.strip()) for x in line.split(',')]
+                    if len(values) != 9:
+                        raise ValueError("Mỗi state phải có đúng 9 số")
+                    if sorted(values) != list(range(9)):
+                        raise ValueError("Mỗi state phải chứa các số từ 0-8")
+                    state = (
+                        tuple(values[0:3]),
+                        tuple(values[3:6]),
+                        tuple(values[6:9])
+                    )
+                    goal_states.append(state)
+            
+            # Cập nhật belief states
+            self.initial_beliefs = initial_states
+            self.goal_beliefs = goal_states
+            
+            # Cập nhật trạng thái hiển thị
+            if initial_states:
+                self.start_state = initial_states[0]
+                self.puzzle_frame.draw_state(self.start_state)
+            
+            self.reset_solution_data()
+            self.control_panel.status_msg.config(text="Belief states đã được cập nhật!")
+            
+        except Exception as e:
+            messagebox.showerror("Input Error", f"Lỗi khi nhập belief states: {str(e)}")
     
     def apply_array_input(self):
         try:
@@ -190,7 +351,19 @@ class MainWindow(tk.Tk):
         self.array_input.insert(0, ",".join(str(num) for num in flat_state))
         
     def solve(self, algorithm_name):
-        self.control_panel.status_msg.config(text=f"Solving with {algorithm_name}...")
+        # Kiểm tra và hiển thị/ẩn belief states dựa trên thuật toán
+        if algorithm_name in ["Sensor Search", "Belief State Search", "No-Observation Belief State Search"]:
+            self.belief_frame.pack(fill="x", pady=5)
+            self.goal_belief_frame.pack(fill="x", pady=5)
+            self.apply_belief_button.pack(pady=5)
+            self.input_frame.pack_forget()  # Ẩn phần input array
+        else:
+            self.belief_frame.pack_forget()
+            self.goal_belief_frame.pack_forget()
+            self.apply_belief_button.pack_forget()
+            self.input_frame.pack(fill="x", pady=5)  # Hiện phần input array
+            
+        self.control_panel.status_msg.config(text=f"Đang giải với thuật toán {algorithm_name}...")
         self.update()  
         
         self.start_time = time.time()

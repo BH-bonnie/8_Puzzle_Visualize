@@ -173,11 +173,12 @@ def belief_state_search(start, goal, max_steps=100):
 def goal_test(belief_state, goal):
     return belief_state == goal
 
-def get_possible_actions(belief_state):
+def get_possible_actions(state):
+    """Get possible actions for a given state."""
     zero_i, zero_j = None, None
     for i in range(3):
         for j in range(3):
-            if belief_state[i][j] == 0:
+            if state[i][j] == 0:
                 zero_i, zero_j = i, j
                 break
     
@@ -217,3 +218,72 @@ def result(belief_state, action):
 def calculate_action_cost(belief_state, action):
 
     return MOVE_COSTS.get(action, 1)
+
+def no_observation_belief_state_search(initial_beliefs, goal_beliefs, max_steps=500):
+    """
+    Implements the no-observation belief state search algorithm.
+    
+    Args:
+        initial_beliefs: List of belief states (each belief state is a set of states)
+        goal_beliefs: List of goal belief states (each goal belief state is a set of states)
+        max_steps: Maximum number of steps to search
+        
+    Returns:
+        path: List of states representing the solution path
+        costs: List of costs for each step
+        all_paths: List of all paths explored
+    """
+    # Initialize queue with initial belief states and empty paths
+    queue = [(belief, [], 0) for belief in initial_beliefs]  # (belief_state, path, cost)
+    visited = set()
+    all_paths = []
+    
+    while queue and len(all_paths) < max_steps:
+        current_belief, path, current_cost = queue.pop(0)
+        
+        # Check if current belief state is a subset of any goal belief
+        for goal_belief in goal_beliefs:
+            if current_belief.issubset(goal_belief):
+                # Convert path of actions to path of states
+                state_path = []
+                current_state = list(current_belief)[0]  # Take any state from current belief
+                state_path.append(current_state)
+                
+                for action in path:
+                    current_state = result(current_state, action)
+                    state_path.append(current_state)
+                
+                return state_path, calculate_costs(state_path), all_paths
+        
+        # Get common actions for all states in current belief
+        common_actions = set.intersection(*[set(get_possible_actions(state)) for state in current_belief])
+        
+        for action in common_actions:
+            # Calculate new belief state by applying action to all states
+            new_belief = set()
+            for state in current_belief:
+                new_state = result(state, action)
+                new_belief.add(new_state)
+            
+            # Convert to tuple for hashing
+            new_belief_tuple = tuple(sorted(new_belief))
+            
+            if new_belief_tuple not in visited:
+                visited.add(new_belief_tuple)
+                new_path = path + [action]
+                action_cost = MOVE_COSTS.get(action, 1)
+                new_cost = current_cost + action_cost
+                queue.append((new_belief, new_path, new_cost))
+                
+                # Convert path of actions to path of states for display
+                state_path = []
+                current_state = list(current_belief)[0]  # Take any state from current belief
+                state_path.append(current_state)
+                
+                for a in new_path:
+                    current_state = result(current_state, a)
+                    state_path.append(current_state)
+                
+                all_paths.append((state_path, new_cost))
+    
+    return None, None, all_paths
