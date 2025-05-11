@@ -6,10 +6,10 @@ from .puzzle_frame import PuzzleFrame
 from constants import START_STATE, GOAL_STATE, WIDTH, HEIGHT
 from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
-from algorithms.local import   simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search
+from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.nondeterministic import and_or_graph_search
-from algorithms.sensor_based import sensor_search,belief_state_search
-from algorithms.constraint import solve as backtracking_solve,solve_with_ac3
+from algorithms.sensor_based import sensor_search, belief_state_search
+from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
 from algorithms.utils import generate_random_state
 from .theme import COLORS, apply_style
 
@@ -42,6 +42,8 @@ class MainWindow(tk.Tk):
             "Stochastic HC": stochastic_hill_climbing,
             "Simulated Annealing": simulated_annealing,
             "Beam Search": beam_search,
+            "Steepest Ascent HC": steepest_ascent_hill_climbing,
+            "Genetic Algorithm": genetic_algorithm,
             "AND-OR Search": and_or_graph_search,
             "Sensor Search": sensor_search,
             "Belief State Search": self.belief_state_search_adapter,
