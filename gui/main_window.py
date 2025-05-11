@@ -8,7 +8,7 @@ from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.nondeterministic import and_or_graph_search
-from algorithms.sensor_based import sensor_search, belief_state_search, no_observation_belief_state_search, partially_observable_search
+from algorithms.sensor_based import belief_state_search, no_observation_belief_state_search, partially_observable_search
 from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
 from algorithms.utils import generate_random_state
 from algorithms.Reforcement_learning import QLearning
@@ -46,7 +46,6 @@ class MainWindow(tk.Tk):
             "Steepest Ascent HC": steepest_ascent_hill_climbing,
             "Genetic Algorithm": genetic_algorithm,
             "AND-OR Search": and_or_graph_search,
-            "Sensor Search": sensor_search,
             "Belief State Search": self.belief_state_search_adapter,
             "No-Observation Belief State Search": self.no_observation_belief_state_search_adapter,
             "Partially Observable Search": self.partially_observable_search_adapter,
@@ -134,50 +133,35 @@ class MainWindow(tk.Tk):
         return state_path, costs, all_paths
             
     def partially_observable_search_adapter(self, initial_state, goal_state):
-        try:
-            # Lấy visible part từ ma trận mục tiêu (goal_matrix_entries)
-            visible_state = []
-            for i in range(3):
-                row = []
-                for j in range(3):
-                    value = self.goal_matrix_entries[i][j].get().strip()
-                    if value:
-                        try:
-                            row.append(int(value))
-                        except ValueError:
-                            row.append(None)
-                    else:
-                        row.append(None)
-                visible_state.append(tuple(row))
-
-            # Lấy belief states và goal states từ listbox
-            initial_states = self.get_states_from_listbox(self.belief_listbox)
-            goal_states = self.get_states_from_listbox(self.goal_listbox)
-
-            # Tìm vị trí số 0 trong visible_state
-            sensor_pos = None
-            sensor_value = None
-            for i in range(3):
-                for j in range(3):
-                    if visible_state[i][j] == 0:
-                        sensor_pos = (i, j)
-                        sensor_value = 0
-                        break
-                if sensor_pos:
-                    break
-
-            # Không báo lỗi nếu không có số 0
-            from algorithms.sensor_based import partially_observable_search
-            return partially_observable_search(
-                visible_state,
-                goal_states,
-                sensor_pos,
-                sensor_value
-            )
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi nhập liệu: {str(e)}")
-            return None, None, []
     
+        # Lấy phần nhìn thấy từ goal_matrix_entries (chỉ các ô bị khóa)
+        visible_state = []
+        for i in range(3):
+            row = []
+            for j in range(3):
+                value = self.goal_matrix_entries[i][j].get().strip()
+                if value and self.goal_matrix_entries[i][j].cget('state') == 'disabled':
+                    try:
+                        row.append(int(value))
+                    except ValueError:
+                        row.append(None)
+                else:
+                    row.append(None)
+            visible_state.append(tuple(row))
+
+        # Lấy tập trạng thái niềm tin và trạng thái mục tiêu từ listbox
+        initial_states = self.get_states_from_listbox(self.belief_listbox)
+        goal_states = self.get_states_from_listbox(self.goal_listbox)
+
+        # Kiểm tra đầu vào
+        if not initial_states or not goal_states:
+            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái niềm tin và một mục tiêu niềm tin!")
+            return None, None, []
+
+        # Gọi hàm partially_observable_search
+        path, costs, all_paths = partially_observable_search(visible_state, initial_states, goal_states)
+        
+        return path, costs, all_paths
     def no_observable_search_adapter(self, initial_state, goal_state):
         return no_observable_search(initial_state, goal_state)
     
@@ -415,7 +399,7 @@ class MainWindow(tk.Tk):
 
     def on_algorithm_change(self, *args):
         algorithm_name = self.control_panel.selected_algorithm.get()
-        sensor_algorithms = ["Sensor Search", "Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]
+        sensor_algorithms = ["Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]
         # Luôn ẩn text area
         self.belief_states_frame.pack_forget()
         if algorithm_name in sensor_algorithms:
@@ -527,8 +511,7 @@ class MainWindow(tk.Tk):
             self.current_step += 1
         elif direction == "last":
             self.current_step = len(self.path) - 1
-            
-        self.update_display()
+            self.update_display()
         
     def play_pause(self, is_playing):
         self.is_playing = is_playing
@@ -722,4 +705,20 @@ class MainWindow(tk.Tk):
                     self.goal_matrix_entries[i][j].delete(0, tk.END)
         # Disable nút Khóa sau khi nhấn
         self.save_visible_btn.config(state='disabled')
+
+    def get_states_from_listbox(self, listbox):
+        """
+        Chuyển mỗi dòng trong listbox thành một state 3×3 tuple.
+        Ví dụ dòng "1,2,3,4,5,6,7,8,0" -> ((1,2,3),(4,5,6),(7,8,0))
+        """
+        states = []
+        for line in listbox.get(0, tk.END):
+            parts = [None if s.strip() == 'None' else int(s) for s in line.split(',')]
+            # chia thành 3 hàng
+            state = tuple(
+                tuple(parts[i*3:(i+1)*3]) 
+                for i in range(3)
+            )
+            states.append(state)
+        return states
 
