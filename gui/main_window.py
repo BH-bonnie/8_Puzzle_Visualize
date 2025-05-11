@@ -11,6 +11,7 @@ from algorithms.nondeterministic import and_or_graph_search
 from algorithms.sensor_based import sensor_search, belief_state_search, no_observation_belief_state_search
 from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
 from algorithms.utils import generate_random_state
+from algorithms.Reforcement_learning import QLearning
 from .theme import COLORS, apply_style
 
 class MainWindow(tk.Tk):
@@ -49,13 +50,30 @@ class MainWindow(tk.Tk):
             "Belief State Search": self.belief_state_search_adapter,
             "No-Observation Belief State Search": self.no_observation_belief_state_search_adapter,
             "Backtracking": self.adapt_backtracking,
-            "AC-3": self.adapt_ac3
+            "AC-3": self.adapt_ac3,
+            "Forward Checking": self.adapt_forward_checking,
+            "Q-Learning": self.q_learning_adapter
         }
         
         self.create_widgets()
     
     def adapt_backtracking(self, initial_state, goal_state):
         result = backtracking_solve(initial_state)
+        
+        if result['solution']:
+            path = result['path']
+            if path:
+                from algorithms.utils import calculate_costs
+                costs = calculate_costs(path)
+                all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
+                return path, costs, all_paths
+            else:
+                return None, None, []
+        else:
+            return None, None, []
+    
+    def adapt_forward_checking(self, initial_state, goal_state):
+        result = backtracking_solve(initial_state)  # Using the same solver since Forward Checking is built into it
         
         if result['solution']:
             path = result['path']
@@ -446,4 +464,62 @@ class MainWindow(tk.Tk):
             }
             self.control_panel.update_info(info)
             self.control_panel.update_paths(self.all_paths if self.all_paths else [])
+    
+    def q_learning_adapter(self, initial_state, goal_state):
+        # Tạo instance của QLearning
+        agent = QLearning()
+        
+        # Tạo môi trường giả lập
+        class PuzzleEnvironment:
+            def __init__(self, initial_state, goal_state):
+                self.state = initial_state
+                self.goal_state = goal_state
+                
+            def reset(self):
+                self.state = initial_state
+                return self.state
+                
+            def get_possible_actions(self):
+                from algorithms.utils import get_neighbors
+                return get_neighbors(self.state)
+                
+            def step(self, action):
+                self.state = action
+                reward = -1 if self.state != self.goal_state else 100
+                done = self.state == self.goal_state
+                return self.state, reward, done
+        
+        env = PuzzleEnvironment(initial_state, goal_state)
+        
+        # Huấn luyện agent
+        agent.train(env, num_episodes=1000)
+        
+        # Tìm đường đi tốt nhất
+        path = [initial_state]
+        costs = [0]
+        all_paths = [(path[:], 0)]
+        current_state = initial_state
+        
+        while current_state != goal_state:
+            possible_actions = env.get_possible_actions()
+            if not possible_actions:
+                return None, None, all_paths
+                
+            action = agent.get_best_action(current_state, possible_actions)
+            current_state = action
+            path.append(current_state)
+            
+            # Tính toán chi phí
+            from algorithms.utils import get_move_direction
+            from constants import MOVE_COSTS
+            direction = get_move_direction(path[-2], current_state)
+            new_cost = costs[-1] + (MOVE_COSTS[direction] if direction else 0)
+            costs.append(new_cost)
+            all_paths.append((path[:], new_cost))
+            
+            # Kiểm tra vòng lặp vô hạn
+            if len(path) > 100:
+                return None, None, all_paths
+        
+        return path, costs, all_paths
 

@@ -1,3 +1,5 @@
+import random
+
 def solve(initial_state):
     nodes_expanded = [0]
     max_depth = [0]
@@ -82,7 +84,42 @@ def is_consistent(var, value, assignment, csp):
 
     return True
 
-
+def forward_checking(var, value, assignment, csp):
+    """
+    Performs forward checking when a variable is assigned a value.
+    Updates domains of unassigned variables based on constraints.
+    Returns False if any domain becomes empty, True otherwise.
+    """
+    # Get all unassigned variables
+    unassigned = [v for v in csp['variables'] if v not in assignment]
+    
+    # For each unassigned variable
+    for unassigned_var in unassigned:
+        # Get values that are no longer valid due to the new assignment
+        invalid_values = []
+        for val in csp['domains'][unassigned_var]:
+            temp_assignment = assignment.copy()
+            temp_assignment[var] = value
+            temp_assignment[unassigned_var] = val
+            
+            # Check if this combination violates any constraints
+            for constraint in csp['constraints']:
+                if len(constraint) == 3:
+                    var1, var2, constraint_func = constraint
+                    if var1 in temp_assignment and var2 in temp_assignment:
+                        if not constraint_func(temp_assignment[var1], temp_assignment[var2]):
+                            invalid_values.append(val)
+                            break
+        
+        # Remove invalid values from domain
+        for invalid_val in invalid_values:
+            csp['domains'][unassigned_var].remove(invalid_val)
+        
+        # If domain becomes empty, return False
+        if not csp['domains'][unassigned_var]:
+            return False
+    
+    return True
 
 def backtrack(assignment, index, csp, nodes_expanded, max_depth, path):
     nodes_expanded[0] += 1
@@ -103,14 +140,23 @@ def backtrack(assignment, index, csp, nodes_expanded, max_depth, path):
         return assignment
 
     var = csp['variables'][index]
+    
+    # Save original domains for backtracking
+    original_domains = {v: csp['domains'][v].copy() for v in csp['variables']}
 
     for value in csp['domains'][var]:
         if is_consistent(var, value, assignment, csp):
             assignment[var] = value
             path.append(capture_grid(assignment))  # trạng thái sau khi gán mới
-            result = backtrack(assignment, index + 1, csp, nodes_expanded, max_depth, path)
-            if result:
-                return result
+            
+            # Perform forward checking
+            if forward_checking(var, value, assignment, csp):
+                result = backtrack(assignment, index + 1, csp, nodes_expanded, max_depth, path)
+                if result:
+                    return result
+            
+            # Restore domains if forward checking failed or backtracking failed
+            csp['domains'] = {v: original_domains[v].copy() for v in csp['variables']}
             del assignment[var]
             path.append(capture_grid(assignment))  # trạng thái sau khi xóa để quay lui
 
@@ -179,34 +225,39 @@ def solve_with_ac3(initial_state=None):
         'initial_assignment': {}
     }
 
+    # First apply AC-3 to reduce domains
     nodes_expanded[0] += 1
     ac3_result = ac3(csp)
+    
+    if not ac3_result:
+        return {
+            'path': [],
+            'nodes_expanded': nodes_expanded[0],
+            'max_depth': max_depth[0],
+            'solution': None
+        }
 
-    solution_grid = [[0 for _ in range(3)] for _ in range(3)]
-    partial_assignment = {}
+    # Then use backtracking search with the reduced domains
+    result = backtrack({}, 0, csp, nodes_expanded, max_depth, path)
 
-    for var in variables:
-        idx = int(var[1:]) - 1
-        row, col = idx // 3, idx % 3
-        domain = csp['domains'][var]
-        if len(domain) == 1:
-            value = domain[0]
+    if result:
+        solution_grid = [[0 for _ in range(3)] for _ in range(3)]
+        for var, value in result.items():
+            idx = int(var[1:]) - 1
+            row, col = idx // 3, idx % 3
             solution_grid[row][col] = value
-            partial_assignment[var] = value
-        else:
-            if domain:
-                min_value = min(domain)
-                solution_grid[row][col] = min_value
-                partial_assignment[var] = min_value
-            else:
-                solution_grid[row][col] = 0
 
-    path.append(solution_grid)
-
-    return {
-        'path': path,
-        'nodes_expanded': nodes_expanded[0],
-        'max_depth': max_depth[0],
-        'solution': solution_grid if ac3_result else None
-    }
+        return {
+            'path': path,
+            'nodes_expanded': nodes_expanded[0],
+            'max_depth': max_depth[0],
+            'solution': solution_grid
+        }
+    else:
+        return {
+            'path': [],
+            'nodes_expanded': nodes_expanded[0],
+            'max_depth': max_depth[0],
+            'solution': None
+        }
 
