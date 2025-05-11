@@ -47,7 +47,7 @@ class MainWindow(tk.Tk):
             "Genetic Algorithm": genetic_algorithm,
             "AND-OR Search": and_or_graph_search,
             "Belief State Search": self.belief_state_search_adapter,
-            "No-Observation Belief State Search": self.no_observation_belief_state_search_adapter,
+            "No-Observation Belief State Search": self.no_observable_search_adapter,
             "Partially Observable Search": self.partially_observable_search_adapter,
             "Backtracking": self.adapt_backtracking,
             "AC-3": self.adapt_ac3,
@@ -104,34 +104,7 @@ class MainWindow(tk.Tk):
     def belief_state_search_adapter(self, initial_state, goal_state):
         return belief_state_search(initial_state, goal_state)
     
-    def no_observation_belief_state_search_adapter(self, initial_state, goal_state):
-        # Sử dụng belief states đã nhập
-        if not self.initial_beliefs or not self.goal_beliefs:
-            messagebox.showerror("Error", "Vui lòng nhập belief states trước!")
-            return None, None, []
-            
-        # Convert states to tuples for hashing
-        initial_beliefs = [tuple(tuple(row) for row in state) for state in self.initial_beliefs]
-        goal_beliefs = [tuple(tuple(row) for row in state) for state in self.goal_beliefs]
-        
-        # Mỗi trạng thái ban đầu là một belief state riêng biệt
-        initial_beliefs = [set([state]) for state in initial_beliefs]
-        goal_beliefs = [set(goal_beliefs)]  # Tất cả goal states trong một belief state
-        
-        # Run the algorithm
-        path, costs, all_paths = no_observation_belief_state_search(initial_beliefs, goal_beliefs)
-        
-        # If no solution found, return empty results
-        if path is None:
-            return None, None, all_paths
-            
-        # Convert path back to list of states
-        state_path = []
-        for state in path:
-            state_path.append(tuple(tuple(row) for row in state))
-            
-        return state_path, costs, all_paths
-            
+   
     def partially_observable_search_adapter(self, initial_state, goal_state):
     
         # Lấy phần nhìn thấy từ goal_matrix_entries (chỉ các ô bị khóa)
@@ -180,7 +153,35 @@ class MainWindow(tk.Tk):
         return path, costs, all_paths
 
     def no_observable_search_adapter(self, initial_state, goal_state):
-        return no_observable_search(initial_state, goal_state)
+
+        initial_states = self.get_states_from_listbox(self.belief_listbox)
+        goal_states = self.get_states_from_listbox(self.goal_listbox)
+
+        # Kiểm tra đầu vào
+        if not initial_states or not goal_states:
+            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái niềm tin và một mục tiêu niềm tin!")
+            return None, None, []
+        selected_belief = initial_states[0]  # Có thể thay bằng logic chọn từ belief_listbox
+        self.start_state = selected_belief  # Cập nhật start_state để hiển thị trên puzzle_frame
+        self.puzzle_frame.draw_state(self.start_state)  # Hiển thị trạng thái niềm tin trên puzzle_frame
+        # Gọi hàm partially_observable_search
+        path, costs, all_paths = no_observation_belief_state_search(initial_states, goal_states)
+        
+        # Animate the resulting path for clarity
+        if path:
+            for idx, state in enumerate(path):
+                prev = path[idx-1] if idx > 0 else state
+                # draw current step
+                self.puzzle_frame.draw_state(state)
+                # highlight the move from prev→state
+                self.puzzle_frame.show_move(prev, state)
+                # force immediate repaint
+                self.update_idletasks()
+                self.update()
+                # pause so you can actually see it
+                time.sleep(0.4)
+        
+        return path, costs, all_paths
     
     def create_widgets(self):
         left_panel = tk.Frame(self, bg=COLORS["surface"])
@@ -494,14 +495,7 @@ class MainWindow(tk.Tk):
                         for j in range(3):
                             self.goal_matrix_entries[i][j].delete(0, tk.END)
                             self.goal_matrix_entries[i][j].insert(0, str(values[i*3+j]))
-        # Kiểm tra và hiển thị/ẩn belief states dựa trên thuật toán
-        # if algorithm_name in ["Sensor Search", "Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]:
-        #     self.belief_matrices_frame.pack(fill="x", pady=5)
-        #     self.belief_states_frame.pack_forget()
-        # else:
-        #     self.belief_matrices_frame.pack_forget()
-        #     self.belief_states_frame.pack(fill="x", pady=5)
-            
+     
         self.control_panel.status_msg.config(text=f"Đang giải với thuật toán {algorithm_name}...")
         self.update()  
         

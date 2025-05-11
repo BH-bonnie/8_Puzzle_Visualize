@@ -109,67 +109,49 @@ def result(belief_state, action):
 def calculate_action_cost(belief_state, action):
     return MOVE_COSTS.get(action, 1)
 
-def no_observation_belief_state_search(initial_beliefs, goal_beliefs, max_steps=500):
-    """
-    Implements the no-observation belief state search algorithm.
-    
-    Args:
-        initial_beliefs: List of belief states (each belief state is a set of states)
-        goal_beliefs: List of goal belief states (each goal belief state is a set of states)
-        max_steps: Maximum number of steps to search
-        
-    Returns:
-        path: List of states representing the solution path
-        costs: List of costs for each step
-        all_paths: List of all paths explored
-    """
-    queue = [(belief, [], 0) for belief in initial_beliefs]
-    visited = set()
+def no_observation_belief_state_search(initial_states, goal_states, max_steps=500):
+    initial_belief = set(initial_states)
+  
+    goal_set = set(goal_states)
+
+    queue = deque([(initial_belief, [], 0)])
+    visited = {tuple(sorted(initial_belief))}
     all_paths = []
-    
+    # chọn một representative state từ initial_belief để dựng path
+    rep0 = next(iter(initial_belief))
+
     while queue and len(all_paths) < max_steps:
-        current_belief, path, current_cost = queue.pop(0)
-        
-        for goal_belief in goal_beliefs:
-            if current_belief.issubset(goal_belief):
-                state_path = []
-                current_state = list(current_belief)[0]
-                state_path.append(current_state)
-                
-                for action in path:
-                    current_state = result(current_state, action)
-                    state_path.append(current_state)
-                
-                return state_path, calculate_costs(state_path), all_paths
-        
-        common_actions = set.intersection(*[set(get_possible_actions(state)) for state in current_belief])
-        
-        for action in common_actions:
-            new_belief = set()
-            for state in current_belief:
-                new_state = result(state, action)
-                new_belief.add(new_state)
-            
-            new_belief_tuple = tuple(sorted(new_belief))
-            
-            if new_belief_tuple not in visited:
-                visited.add(new_belief_tuple)
-                new_path = path + [action]
-                action_cost = MOVE_COSTS.get(action, 1)
-                new_cost = current_cost + action_cost
-                queue.append((new_belief, new_path, new_cost))
-                
-                state_path = []
-                current_state = list(current_belief)[0]
-                state_path.append(current_state)
-                
-                for a in new_path:
-                    current_state = result(current_state, a)
-                    state_path.append(current_state)
-                
-                all_paths.append((state_path, new_cost))
-    
+        belief, actions, cost = queue.popleft()
+        # goal-test: nếu có bất kỳ state nào trong belief nằm trong goal_set
+        hit = next((s for s in belief if s in goal_set), None)
+        if hit:
+            # dựng đường đi từ rep0 qua chuỗi actions
+            path = [rep0]
+            for a in actions:
+                path.append(result(path[-1], a))
+            return path, calculate_costs(path), all_paths
+
+        # tìm các action khả thi (common to all states)
+        common = set.intersection(*[set(get_possible_actions(s)) for s in belief])
+        for a in common:
+            # 3.1 predict
+            pred = {result(s, a) for s in belief}
+            # 3.2 update với visible_state
+            updated = {s for s in pred}
+            key = tuple(sorted(updated))
+            if updated and key not in visited:
+                visited.add(key)
+                new_cost = cost + MOVE_COSTS.get(a, 1)
+                new_actions = actions + [a]
+                queue.append((updated, new_actions, new_cost))
+                # ghi lại 1 đường đại diện cho all_paths
+                rep_path = [rep0]
+                for aa in new_actions:
+                    rep_path.append(result(rep_path[-1], aa))
+                all_paths.append((rep_path, new_cost))
+
     return None, None, all_paths
+
 
 def partially_observable_search(visible_state, initial_states, goal_states, max_steps=500):
     """
