@@ -7,9 +7,8 @@ from constants import START_STATE, GOAL_STATE, WIDTH, HEIGHT
 from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
-from algorithms.nondeterministic import and_or_graph_search
-from algorithms.sensor_based import belief_state_search, no_observation_belief_state_search, partially_observable_search
 from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
+from algorithms.complex import and_or_graph_search, no_observation_belief_state_search, partially_observable_search
 from algorithms.utils import generate_random_state
 from algorithms.Reforcement_learning import QLearning
 from .theme import COLORS, apply_style
@@ -46,7 +45,6 @@ class MainWindow(tk.Tk):
             "Steepest Ascent HC": steepest_ascent_hill_climbing,
             "Genetic Algorithm": genetic_algorithm,
             "AND-OR Search": and_or_graph_search,
-            "Belief State Search": self.belief_state_search_adapter,
             "No-Observation Belief State Search": self.no_observable_search_adapter,
             "Partially Observable Search": self.partially_observable_search_adapter,
             "Backtracking": self.adapt_backtracking,
@@ -100,9 +98,6 @@ class MainWindow(tk.Tk):
             return path, costs, all_paths
         else:
             return [], [], []
-    
-    def belief_state_search_adapter(self, initial_state, goal_state):
-        return belief_state_search(initial_state, goal_state)
     
    
     def partially_observable_search_adapter(self, initial_state, goal_state):
@@ -417,10 +412,9 @@ class MainWindow(tk.Tk):
 
     def on_algorithm_change(self, *args):
         algorithm_name = self.control_panel.selected_algorithm.get()
-        sensor_algorithms = ["Belief State Search", "No-Observation Belief State Search", "Partially Observable Search"]
-        # Luôn ẩn text area
+        complex_algorithms = [ "No Observation Belief State Search", "Partially Observable Search"]
         self.belief_states_frame.pack_forget()
-        if algorithm_name in sensor_algorithms:
+        if algorithm_name in complex_algorithms:
             self.belief_matrices_frame.pack(fill="x", pady=5)
             self.input_frame.pack_forget()
         else:
