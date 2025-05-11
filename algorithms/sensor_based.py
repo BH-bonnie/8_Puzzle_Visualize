@@ -173,55 +173,79 @@ def no_observation_belief_state_search(initial_beliefs, goal_beliefs, max_steps=
 
 def partially_observable_search(visible_state, initial_states, goal_states, max_steps=500):
     """
-    Implements partially observable search for the 8-puzzle problem.
+    Implements partially observable search for the 8-puzzle problem using belief updates.
 
     Args:
-        visible_state: A 3x3 tuple of tuples representing the visible part (locked cells).
-                      Non-visible cells are None.
-        initial_states: List of initial belief states from belief_listbox.
-        goal_states: List of goal states from goal_listbox.
-        max_steps: Maximum number of steps to search.
+        visible_state: 3x3 tuple of tuples; các ô khóa (locked) có số, các ô mở là None.
+        initial_states: List of complete states ứng viên ban đầu.
+        goal_states: List of complete goal states.
+        max_steps: giới hạn bước tìm.
 
     Returns:
-        path: List of states representing the solution path.
-        costs: List of costs for each step.
-        all_paths: List of all paths explored.
+        path: List of states từ một đại diện initial → goal
+        costs: chi phí tích lũy
+        all_paths: danh sách các đường đi đại diện ở mỗi bước
     """
-    # 1. Create initial belief state based on visible state and initial states
+    from collections import deque
+    from .utils import calculate_costs
+    # 1. Build initial belief
     present = {v for row in visible_state for v in row if v is not None}
     missing = list(set(range(9)) - present)
     blanks = [(i, j) for i in range(3) for j in range(3) if visible_state[i][j] is None]
 
     initial_belief = set()
-    for state in initial_states:
-        # Check if the state is consistent with the visible part
-        is_consistent = True
-        for i in range(3):
-            for j in range(3):
-                if visible_state[i][j] is not None and state[i][j] != visible_state[i][j]:
-                    is_consistent = False
-                    break
-            if not is_consistent:
-                break
-        if is_consistent:
-            initial_belief.add(state)
-
-    # If no initial states are provided, generate all possible states consistent with visible part
+    for s in initial_states:
+        if all(visible_state[i][j] is None or s[i][j] == visible_state[i][j]
+               for i in range(3) for j in range(3)):
+            initial_belief.add(s)
     if not initial_belief:
+        import itertools
         for perm in itertools.permutations(missing):
             board = [[visible_state[i][j] for j in range(3)] for i in range(3)]
-            for (i, j), val in zip(blanks, perm):
-                board[i][j] = val
-            initial_belief.add(tuple(tuple(row) for row in board))
+            for (i, j), v in zip(blanks, perm):
+                board[i][j] = v
+            initial_belief.add(tuple(tuple(r) for r in board))
 
-    # 2. Create goal belief states (each goal state is a singleton set)
-    goal_beliefs = [{state} for state in goal_states]
+    # 2. Goal set for quick test
+    goal_set = set(goal_states)
 
-    # 3. Call no-observation belief state search
-    path, costs, all_paths = no_observation_belief_state_search(
-        [initial_belief],
-        goal_beliefs,
-        max_steps
-    )
+    # 3. BFS on belief-space
+    queue = deque([(initial_belief, [], 0)])
+    visited = {tuple(sorted(initial_belief))}
+    all_paths = []
+    # chọn một representative state từ initial_belief để dựng path
+    rep0 = next(iter(initial_belief))
 
-    return path, costs, all_paths
+    while queue and len(all_paths) < max_steps:
+        belief, actions, cost = queue.popleft()
+        # goal-test: nếu có bất kỳ state nào trong belief nằm trong goal_set
+        hit = next((s for s in belief if s in goal_set), None)
+        if hit:
+            # dựng đường đi từ rep0 qua chuỗi actions
+            path = [rep0]
+            for a in actions:
+                path.append(result(path[-1], a))
+            return path, calculate_costs(path), all_paths
+
+        # tìm các action khả thi (common to all states)
+        common = set.intersection(*[set(get_possible_actions(s)) for s in belief])
+        for a in common:
+            # 3.1 predict
+            pred = {result(s, a) for s in belief}
+            # 3.2 update với visible_state
+            updated = {s for s in pred
+                       if all(visible_state[i][j] is None or s[i][j] == visible_state[i][j]
+                              for i in range(3) for j in range(3))}
+            key = tuple(sorted(updated))
+            if updated and key not in visited:
+                visited.add(key)
+                new_cost = cost + MOVE_COSTS.get(a, 1)
+                new_actions = actions + [a]
+                queue.append((updated, new_actions, new_cost))
+                # ghi lại 1 đường đại diện cho all_paths
+                rep_path = [rep0]
+                for aa in new_actions:
+                    rep_path.append(result(rep_path[-1], aa))
+                all_paths.append((rep_path, new_cost))
+
+    return None, None, all_paths
