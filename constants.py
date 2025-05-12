@@ -14,6 +14,6 @@ BUTTON_COLOR = "#2ECC71"
 BUTTON_HOVER = "#27AE60"
 RED = "#FF0000"
 
-START_STATE = ((1, 2 ,3 ), (4, 5, 6), (0, 7, 8))
+START_STATE = ((1, 2 ,3 ), (4, 0, 5), (6, 7, 8))
 GOAL_STATE = ((1, 2, 3), (4, 5, 6), (7, 8, 0))
 MOVE_COSTS = {"up": 1, "down": 2, "left": 3, "right": 4}

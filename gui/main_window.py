@@ -54,6 +54,14 @@ class MainWindow(tk.Tk):
             "Q-Learning": self.adapt_q_learning
         }
         
+        # Định nghĩa 3 nhóm thuật toán
+        self.algorithm_groups = {
+            "Uninformed": ["BFS", "DFS", "UCS", "IDS"],
+            "Informed":   ["Greedy", "A*", "IDA*"],
+            "Local":      ["Simple HC", "Stochastic HC", "Simulated Annealing", "Beam Search", "Steepest Ascent HC", "Genetic Algorithm"]
+            
+        }
+        
         self.create_widgets()
     
     def adapt_backtracking(self, start_state, goal_state):
@@ -283,6 +291,13 @@ class MainWindow(tk.Tk):
         self.puzzle_frame = PuzzleFrame(left_panel)
         self.puzzle_frame.pack(pady=10)
         self.puzzle_frame.draw_state(self.start_state)
+        
+        # thêm nút Run All ngay cạnh các nút nhập
+        self.run_all_btn = tk.Button(self, text="Run All", command=self.run_all, width=12)
+        apply_style(self.run_all_btn, "button")
+        self.run_all_btn.pack(side=tk.TOP, anchor="ne", padx=10, pady=5)
+        
+        # sau đó mới vẽ control panel
         self.control_panel = ControlPanel(self, self.solve, self.navigate, self.play_pause)
         self.control_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
         self.control_panel.selected_algorithm.trace_add("write", self.on_algorithm_change)
@@ -669,4 +684,48 @@ class MainWindow(tk.Tk):
             )
             states.append(state)
         return states
+
+    def run_all(self):
+        """Chạy lần lượt tất cả các thuật toán trong 3 nhóm, thu thập thời gian, steps, cost và states explored."""
+        results = []
+        original_start = self.start_state
+        original_goal  = self.goal_state
+        for group, names in self.algorithm_groups.items():
+            for name in names:
+                fn = self.algorithms[name]
+                # reset
+                self.reset_solution_data()
+                self.start_state, self.goal_state = original_start, original_goal
+                t0 = time.time()
+                path, costs, all_paths = fn(self.start_state, self.goal_state)
+                t1 = time.time()
+                if path:
+                    steps = len(path) - 1
+                    cost  = costs[-1]
+                    explored = len(all_paths)
+                else:
+                    steps = None
+                    cost  = None
+                    explored = len(all_paths) if all_paths else 0
+                results.append({
+                    "Group": group,
+                    "Algorithm": name,
+                    "Time (s)": f"{t1-t0:.3f}",
+                    "Steps": steps,
+                    "Cost": cost,
+                    "States": explored
+                })
+        # hiển thị kết quả trong cửa sổ phụ
+        win = tk.Toplevel(self)
+        win.title("Run All Comparison")
+        txt = tk.Text(win, width=70, height=15, font=('Consolas',10))
+        txt.pack(padx=10, pady=10)
+        # header
+        txt.insert("end", f"{'Group':12} {'Algo':25} {'Time':>8} {'Steps':>6} {'Cost':>6} {'States':>7}\n")
+        txt.insert("end", "-"*70 + "\n")
+        for r in results:
+            txt.insert("end",
+              f"{r['Group']:12} {r['Algorithm']:25} {r['Time (s)']:>8} {str(r['Steps']):>6} {str(r['Cost']):>6} {str(r['States']):>7}\n"
+            )
+        txt.config(state='disabled')
 
