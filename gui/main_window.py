@@ -44,7 +44,7 @@ class MainWindow(tk.Tk):
             "Beam Search": beam_search,
             "Steepest Ascent HC": steepest_ascent_hill_climbing,
             "Genetic Algorithm": genetic_algorithm,
-            "AND-OR Search": and_or_graph_search,
+            "And-Or Graph Search": and_or_graph_search,
             "No-Observation Belief State Search": self.no_observable_search_adapter,
             "Partially Observable Search": self.partially_observable_search_adapter,
             "Backtracking": self.adapt_backtracking,

@@ -1,14 +1,12 @@
 import random
 import itertools
 from collections import deque
-from .utils import get_neighbors, get_move_direction, calculate_costs
+from .utils import get_neighbors, get_move_direction, calculate_costs, get_zero_position  # Đảm bảo import get_zero_position
 from .informed import heuristic
 from constants import MOVE_COSTS
 
-# ================= Common utility =================
-
 def get_possible_actions(state):
-    zero_i, zero_j = [(i, j) for i in range(3) for j in range(3) if state[i][j] == 0][0]
+    zero_i, zero_j = get_zero_position(state)  # Sử dụng get_zero_position thay vì list comprehension
     actions = []
     if zero_i > 0: actions.append("up")
     if zero_i < 2: actions.append("down")
@@ -17,27 +15,18 @@ def get_possible_actions(state):
     return actions
 
 def result(state, action):
-    zero_i, zero_j = [(i, j) for i in range(3) for j in range(3) if state[i][j] == 0][0]
-    new_state = [list(row) for row in state]
-    if action == "up" and zero_i > 0:
-        new_state[zero_i][zero_j], new_state[zero_i-1][zero_j] = new_state[zero_i-1][zero_j], new_state[zero_i][zero_j]
-    elif action == "down" and zero_i < 2:
-        new_state[zero_i][zero_j], new_state[zero_i+1][zero_j] = new_state[zero_i+1][zero_j], new_state[zero_i][zero_j]
-    elif action == "left" and zero_j > 0:
-        new_state[zero_i][zero_j], new_state[zero_i][zero_j-1] = new_state[zero_i][zero_j-1], new_state[zero_i][zero_j]
-    elif action == "right" and zero_j < 2:
-        new_state[zero_i][zero_j], new_state[zero_i][zero_j+1] = new_state[zero_i][zero_j+1], new_state[zero_i][zero_j]
-    return tuple(tuple(row) for row in new_state)
-
+    neighbors = get_neighbors(state)  
+    for neighbor in neighbors:
+        if get_move_direction(state, neighbor) == action:  
+            return neighbor
+    return state 
 def goal_test(state, goal):
     return state == goal
 
 def results(state, action):
     return [result(state, action)]
 
-# ============== AND-OR Graph Search ==============
-
-def and_or_graph_search(start, goal, max_depth=50):
+def and_or_graph_search(start, goal, max_depth=100):
     result = or_search(start, goal, {}, 0, max_depth)
     if result == 'failure':
         return None, None, []
@@ -45,7 +34,6 @@ def and_or_graph_search(start, goal, max_depth=50):
     costs = calculate_costs(path)
     all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
     return path, costs, all_paths
-
 
 def or_search(state, goal, path, depth, max_depth):
     if depth > max_depth:
@@ -73,7 +61,6 @@ def and_search(states, goal, path, depth, max_depth):
         plans[s] = plan
     return plans
 
-
 def extract_path(solution, start, goal):
     if not solution:
         return [start]
@@ -85,8 +72,6 @@ def extract_path(solution, start, goal):
             subplan = and_plan.get(next_state, [])
             return [start] + extract_path(subplan, next_state, goal)
     return [start]
-
-# ============== No Observation Search ==============
 
 def no_observation_belief_state_search(initial_states, goal_states, max_steps=500):
     initial_belief = set(initial_states)
@@ -120,8 +105,6 @@ def no_observation_belief_state_search(initial_states, goal_states, max_steps=50
                 all_paths.append((rep_path, new_cost))
 
     return None, None, all_paths
-
-# ============== Partially Observable Search ==============
 
 def partially_observable_search(visible_state, initial_states, goal_states, max_steps=500):
     present = {v for row in visible_state for v in row if v is not None}

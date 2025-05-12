@@ -85,24 +85,15 @@ def is_consistent(var, value, assignment, csp):
     return True
 
 def forward_checking(var, value, assignment, csp):
-    """
-    Performs forward checking when a variable is assigned a value.
-    Updates domains of unassigned variables based on constraints.
-    Returns False if any domain becomes empty, True otherwise.
-    """
-    # Get all unassigned variables
     unassigned = [v for v in csp['variables'] if v not in assignment]
     
-    # For each unassigned variable
     for unassigned_var in unassigned:
-        # Get values that are no longer valid due to the new assignment
         invalid_values = []
         for val in csp['domains'][unassigned_var]:
             temp_assignment = assignment.copy()
             temp_assignment[var] = value
             temp_assignment[unassigned_var] = val
             
-            # Check if this combination violates any constraints
             for constraint in csp['constraints']:
                 if len(constraint) == 3:
                     var1, var2, constraint_func = constraint
@@ -111,11 +102,9 @@ def forward_checking(var, value, assignment, csp):
                             invalid_values.append(val)
                             break
         
-        # Remove invalid values from domain
         for invalid_val in invalid_values:
             csp['domains'][unassigned_var].remove(invalid_val)
         
-        # If domain becomes empty, return False
         if not csp['domains'][unassigned_var]:
             return False
     
@@ -131,35 +120,30 @@ def backtrack(assignment, index, csp, nodes_expanded, max_depth, path):
             idx = int(var[1:]) - 1
             row, col = idx // 3, idx % 3
             grid[row][col] = value
-        return [row[:] for row in grid]  # bản sao
+        return [row[:] for row in grid]  
 
     if assignment:
-        path.append(capture_grid(assignment))  # lưu trạng thái hiện tại
+        path.append(capture_grid(assignment)) 
 
     if index == len(csp['variables']):
         return assignment
 
     var = csp['variables'][index]
     
-    # Save original domains for backtracking
     original_domains = {v: csp['domains'][v].copy() for v in csp['variables']}
 
     for value in csp['domains'][var]:
         if is_consistent(var, value, assignment, csp):
             assignment[var] = value
-            path.append(capture_grid(assignment))  # trạng thái sau khi gán mới
-            
-            # Perform forward checking
+            path.append(capture_grid(assignment))  
             if forward_checking(var, value, assignment, csp):
                 result = backtrack(assignment, index + 1, csp, nodes_expanded, max_depth, path)
                 if result:
                     return result
             
-            # Restore domains if forward checking failed or backtracking failed
             csp['domains'] = {v: original_domains[v].copy() for v in csp['variables']}
             del assignment[var]
-            path.append(capture_grid(assignment))  # trạng thái sau khi xóa để quay lui
-
+            path.append(capture_grid(assignment))  
     return None
 
 def ac3(csp):
@@ -237,7 +221,6 @@ def solve_with_ac3(initial_state=None):
             'solution': None
         }
 
-    # Then use backtracking search with the reduced domains
     result = backtrack({}, 0, csp, nodes_expanded, max_depth, path)
 
     if result:
