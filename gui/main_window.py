@@ -5,11 +5,12 @@ from .control_panel import ControlPanel
 from .puzzle_frame import PuzzleFrame
 from constants import START_STATE, GOAL_STATE, WIDTH, HEIGHT
 from algorithms.uninformed import bfs, dfs, ucs, ids
-from algorithms.informed import greedy, astar, ida_star,heuristic
+from algorithms.informed import greedy, astar, ida_star, heuristic
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.constraint import solve as solve
-from algorithms.complex import and_or_graph_search, no_observation_belief_state_search, partially_observable_search
-from algorithms.utils import generate_random_state,calculate_costs
+from algorithms.complex import and_or_graph_search
+from algorithms import no_observation_belief_state_search, partially_observable_search
+from algorithms.utils import generate_random_state, calculate_costs
 from algorithms.Reforcement_learning import q_learning
 from .theme import COLORS, apply_style
 
@@ -45,12 +46,12 @@ class MainWindow(tk.Tk):
             "Steepest Ascent HC": steepest_ascent_hill_climbing,
             "Genetic Algorithm": genetic_algorithm,
             "And-Or Graph Search": and_or_graph_search,
-            "No-Observation Belief State Search": self.no_observable_search_adapter,
-            "Partially Observable Search": self.partially_observable_search_adapter,
+            "No-Observation Belief State Search": self.adapt_no_observable_search,
+            "Partially Observable Search": self.adapt_partially_observable_search,
             "Backtracking": self.adapt_backtracking,
             "AC-3": self.adapt_ac3,
             "Forward Checking": self.adapt_forward_checking,
-            "Q-Learning": self.q_learning_adapter
+            "Q-Learning": self.adapt_q_learning
         }
         
         self.create_widgets()
@@ -97,85 +98,64 @@ class MainWindow(tk.Tk):
         else:
             return None, None, []
     
-   
-    def partially_observable_search_adapter(self, initial_state, goal_state):
-    
-        # Lấy phần nhìn thấy từ goal_matrix_entries (chỉ các ô bị khóa)
-        visible_state = []
+    def adapt_partially_observable_search(self, initial_state, goal_state):
+        visible = []
         for i in range(3):
             row = []
             for j in range(3):
-                value = self.goal_matrix_entries[i][j].get().strip()
-                if value and self.goal_matrix_entries[i][j].cget('state') == 'disabled':
-                    try:
-                        row.append(int(value))
-                    except ValueError:
-                        row.append(None)
+                e = self.goal_matrix_entries[i][j]
+                if e.cget('state') == 'disabled':
+                    row.append(int(e.get()))
                 else:
                     row.append(None)
-            visible_state.append(tuple(row))
+            visible.append(tuple(row))
 
-        # Lấy tập trạng thái niềm tin và trạng thái mục tiêu từ listbox
-        initial_states = self.get_states_from_listbox(self.belief_listbox)
-        goal_states = self.get_states_from_listbox(self.goal_listbox)
-
-        # Kiểm tra đầu vào
-        if not initial_states or not goal_states:
-            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái niềm tin và một mục tiêu niềm tin!")
-            return None, None, []
-        selected_belief = initial_states[0]  # Có thể thay bằng logic chọn từ belief_listbox
-        self.start_state = selected_belief  # Cập nhật start_state để hiển thị trên puzzle_frame
-        self.puzzle_frame.draw_state(self.start_state)  # Hiển thị trạng thái niềm tin trên puzzle_frame
-        # Gọi hàm partially_observable_search
-        path, costs, all_paths = partially_observable_search(visible_state, initial_states, goal_states)
-        
-        # Animate the resulting path for clarity
-        if path:
-            for idx, state in enumerate(path):
-                prev = path[idx-1] if idx > 0 else state
-                # draw current step
-                self.puzzle_frame.draw_state(state)
-                # highlight the move from prev→state
-                self.puzzle_frame.show_move(prev, state)
-                # force immediate repaint
-                self.update_idletasks()
-                self.update()
-                # pause so you can actually see it
-                time.sleep(0.4)
-        
-        return path, costs, all_paths
-
-    def no_observable_search_adapter(self, initial_state, goal_state):
+        # bắt buộc phải có ít nhất 1 ô visible
+        if not any(cell is not None for row in visible for cell in row):
+            messagebox.showerror("Lỗi", "Vui lòng khóa ít nhất một ô trong phần nhìn thấy!")
+            return [], {}, []
 
         initial_states = self.get_states_from_listbox(self.belief_listbox)
         goal_states = self.get_states_from_listbox(self.goal_listbox)
-
-        # Kiểm tra đầu vào
         if not initial_states or not goal_states:
-            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái niềm tin và một mục tiêu niềm tin!")
-            return None, None, []
-        selected_belief = initial_states[0]  # Có thể thay bằng logic chọn từ belief_listbox
-        self.start_state = selected_belief  # Cập nhật start_state để hiển thị trên puzzle_frame
-        self.puzzle_frame.draw_state(self.start_state)  # Hiển thị trạng thái niềm tin trên puzzle_frame
-        # Gọi hàm partially_observable_search
-        path, costs, all_paths = no_observation_belief_state_search(initial_states, goal_states)
-        
-        # Animate the resulting path for clarity
-        if path:
-            for idx, state in enumerate(path):
-                prev = path[idx-1] if idx > 0 else state
-                # draw current step
-                self.puzzle_frame.draw_state(state)
-                # highlight the move from prev→state
-                self.puzzle_frame.show_move(prev, state)
-                # force immediate repaint
-                self.update_idletasks()
-                self.update()
-                # pause so you can actually see it
-                time.sleep(0.4)
-        
+            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái belief và một mục tiêu belief!")
+            return [], {}, []
+
+        self.start_state = initial_states[0]
+        self.puzzle_frame.draw_state(self.start_state)
+
+        path, costs, all_paths = partially_observable_search(
+            visible, initial_states, goal_states
+        )
         return path, costs, all_paths
-    
+
+    def adapt_no_observable_search(self, initial_state, goal_state):
+        initial_states = self.get_states_from_listbox(self.belief_listbox)
+        goal_states = self.get_states_from_listbox(self.goal_listbox)
+        if not initial_states or not goal_states:
+            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một trạng thái belief và một mục tiêu belief!")
+            return [], {}, []
+
+        self.start_state = initial_states[0]
+        self.puzzle_frame.draw_state(self.start_state)
+
+        path, costs, all_paths = no_observation_belief_state_search(
+            initial_states, goal_states
+        )
+        return path, costs, all_paths
+    def adapt_q_learning(self, start_state, goal_state):
+        # nếu GUI cần theo dõi Q và cache riêng
+        distance_cache = {}
+        Q = {}
+        # gọi vào hàm q_learning chính
+        path, costs, all_paths = q_learning(
+            start_state, goal_state,
+            episodes=2000, alpha=0.1, gamma=0.9,
+            epsilon_start=1.0, epsilon_end=0.01,
+            max_steps=100,
+            Q=Q, distance_cache=distance_cache
+        )
+        return path, costs, all_paths
     def create_widgets(self):
         left_panel = tk.Frame(self, bg=COLORS["surface"])
         left_panel.pack(side=tk.LEFT, padx=20, pady=20)
@@ -377,6 +357,9 @@ class MainWindow(tk.Tk):
                     self.goal_matrix_entries[i][j].focus_set()
                     return
 
+        # sau khi Thêm xong, disable nút Thêm cho lần kế tiếp
+        self.save_goal_btn.config(state='disabled')
+
     def clear_belief_matrix(self):
         # Xóa nội dung trong ma trận belief
         for i in range(3):
@@ -410,10 +393,19 @@ class MainWindow(tk.Tk):
 
     def on_algorithm_change(self, *args):
         algorithm_name = self.control_panel.selected_algorithm.get()
-        complex_algorithms = [ "No Observation Belief State Search", "Partially Observable Search"]
+        complex_algorithms = ["No Observation Belief State Search", "Partially Observable Search"]
         self.belief_states_frame.pack_forget()
         if algorithm_name in complex_algorithms:
             self.belief_matrices_frame.pack(fill="x", pady=5)
+            if algorithm_name == "No Observation Belief State Search":
+                self.clear_goal_matrix()
+                self.save_visible_btn.config(state='disabled')
+                self.save_goal_btn.config(state='normal')
+            else:
+                # Partially-Observable: reset, enable khóa, disable Thêm
+                self.clear_goal_matrix()
+                self.save_visible_btn.config(state='normal')
+                self.save_goal_btn.config(state='disabled')
             self.input_frame.pack_forget()
         else:
             self.belief_matrices_frame.pack_forget()
@@ -492,8 +484,13 @@ class MainWindow(tk.Tk):
         self.update()  
         
         self.start_time = time.time()
-        
-        self.path, self.costs, self.all_paths = self.algorithms[algorithm_name](self.start_state, self.goal_state)
+
+        if algorithm_name == "No Observation Belief State Search":
+            self.path, self.costs, self.all_paths = self.adapt_no_observable_search(None, None)
+        elif algorithm_name == "Partially Observable Search":
+            self.path, self.costs, self.all_paths = self.adapt_partially_observable_search(None, None)
+        else:
+            self.path, self.costs, self.all_paths = self.algorithms[algorithm_name](self.start_state, self.goal_state)
         
         self.execution_time = time.time() - self.start_time
         
@@ -571,19 +568,7 @@ class MainWindow(tk.Tk):
             self.control_panel.update_info(info)
             self.control_panel.update_paths(self.all_paths if self.all_paths else [])
     
-    def q_learning_adapter(self, start_state, goal_state):
-        # nếu GUI cần theo dõi Q và cache riêng
-        distance_cache = {}
-        Q = {}
-        # gọi vào hàm q_learning chính
-        path, costs, all_paths = q_learning(
-            start_state, goal_state,
-            episodes=2000, alpha=0.1, gamma=0.9,
-            epsilon_start=1.0, epsilon_end=0.01,
-            max_steps=100,
-            Q=Q, distance_cache=distance_cache
-        )
-        return path, costs, all_paths
+  
     def handle_matrix_keypress(self, event, row, col, matrix_type):
         """Handle keyboard navigation in matrix entries"""
         entries = self.belief_matrix_entries if matrix_type == 'belief' else self.goal_matrix_entries
@@ -649,6 +634,13 @@ class MainWindow(tk.Tk):
                     entries[row][next_col].focus_set()
 
     def save_visible_part(self):
+        # chỉ cho phép khóa khi có ít nhất một ô được nhập số 0-8
+        if not any(
+            self.goal_matrix_entries[i][j].get().strip().isdigit()
+            for i in range(3) for j in range(3)
+        ):
+            messagebox.showerror("Lỗi", "Vui lòng nhập ít nhất một ô để khóa!")
+            return
         # Kiểm tra và lưu các ô đã nhập số từ 0-8
         for i in range(3):
             for j in range(3):
@@ -657,11 +649,13 @@ class MainWindow(tk.Tk):
                     # Khóa ô này
                     self.goal_matrix_entries[i][j].config(state='disabled')
                 else:
-                    # Mở khóa các ô khác
+                    # Mở khóa các ô khác và xóa nội dung
                     self.goal_matrix_entries[i][j].config(state='normal')
                     self.goal_matrix_entries[i][j].delete(0, tk.END)
         # Disable nút Khóa sau khi nhấn
         self.save_visible_btn.config(state='disabled')
+        # sau khi khóa, cho phép Thêm mục tiêu niềm tin
+        self.save_goal_btn.config(state='normal')
 
     def get_states_from_listbox(self, listbox):
       
