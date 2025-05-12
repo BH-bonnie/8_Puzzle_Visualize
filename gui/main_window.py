@@ -280,7 +280,7 @@ class MainWindow(tk.Tk):
         input_label.pack(side=tk.LEFT, padx=5)
         self.array_input = tk.Entry(self.input_frame, width=15)
         self.array_input.pack(side=tk.LEFT, padx=5)
-        self.array_input.insert(0, "1,2,3,4,5,6,0,7,8")  
+        self.array_input.insert(0, "1,2,3,4,0,5,6,7,8")  
         apply_button = tk.Button(
             self.input_frame,
             text="Apply Array",
@@ -288,6 +288,16 @@ class MainWindow(tk.Tk):
         )
         apply_style(apply_button, "button")
         apply_button.pack(side=tk.LEFT, padx=5)
+
+        # Add Random button right next to Apply Array
+        random_button = tk.Button(
+            self.input_frame,
+            text="Random",
+            command=self.randomize_state
+        )
+        apply_style(random_button, "button")
+        random_button.pack(side=tk.LEFT, padx=5)
+
         self.puzzle_frame = PuzzleFrame(left_panel)
         self.puzzle_frame.pack(pady=10)
         self.puzzle_frame.draw_state(self.start_state)
@@ -458,6 +468,17 @@ class MainWindow(tk.Tk):
             
         except Exception as e:
             messagebox.showerror("Input Error", f"Invalid input format: {str(e)}")
+
+    def randomize_state(self):
+        """Generate a random puzzle, write it to the entry and apply."""
+        # generate_random_state returns a tuple-of-tuples, e.g. ((1,2,3),(4,0,5),(6,7,8))
+        new_state = generate_random_state()
+        # flatten and format as comma‐separated
+        flat = [str(v) for row in new_state for v in row]
+        self.array_input.delete(0, tk.END)
+        self.array_input.insert(0, ",".join(flat))
+        # now redraw & reset via apply_array_input
+        self.apply_array_input()
     
     def reset_solution_data(self):
         self.start_time = None
