@@ -7,7 +7,7 @@ from constants import START_STATE, GOAL_STATE, WIDTH, HEIGHT
 from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
-from algorithms.constraint import solve as backtracking_solve, solve_with_ac3
+from algorithms.constraint import solve as solve
 from algorithms.complex import and_or_graph_search, no_observation_belief_state_search, partially_observable_search
 from algorithms.utils import generate_random_state
 from algorithms.Reforcement_learning import QLearning
@@ -55,8 +55,23 @@ class MainWindow(tk.Tk):
         
         self.create_widgets()
     
-    def adapt_backtracking(self, initial_state, goal_state):
-        result = backtracking_solve(initial_state)
+    def adapt_backtracking(self, start_state, goal_state):
+        result = solve(start_state, method='backtracking')
+
+        if result['solution']:
+            path = result['path']
+            if path:
+                from algorithms.utils import calculate_costs
+                costs = calculate_costs(path)
+                all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
+                return path, costs, all_paths
+            else:
+                return None, None, []
+        else:
+            return None, None, []
+    
+    def adapt_forward_checking(self, start_state, goal_state):
+        result = solve(start_state, method='forward')
         
         if result['solution']:
             path = result['path']
@@ -70,8 +85,8 @@ class MainWindow(tk.Tk):
         else:
             return None, None, []
     
-    def adapt_forward_checking(self, initial_state, goal_state):
-        result = backtracking_solve(initial_state)  # Using the same solver since Forward Checking is built into it
+    def adapt_ac3(self, start_state, goal_state):
+        result = solve(start_state, method='ac3')
         
         if result['solution']:
             path = result['path']
@@ -84,20 +99,6 @@ class MainWindow(tk.Tk):
                 return None, None, []
         else:
             return None, None, []
-    
-    def adapt_ac3(self, initial_state, goal_state):        
-        result = solve_with_ac3(initial_state)
-        
-        if result['solution'] is not None:
-            path = result['path']
-            
-            costs = [i for i in range(len(path))]
-            
-            all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
-            
-            return path, costs, all_paths
-        else:
-            return [], [], []
     
    
     def partially_observable_search_adapter(self, initial_state, goal_state):

@@ -1,25 +1,25 @@
 import random
 import itertools
 from collections import deque
-from .utils import get_neighbors, get_move_direction, calculate_costs, get_zero_position  # Đảm bảo import get_zero_position
+from .utils import get_neighbors, get_move_direction, calculate_costs, get_zero_position
 from .informed import heuristic
 from constants import MOVE_COSTS
 
 def get_possible_actions(state):
-    zero_i, zero_j = get_zero_position(state)  # Sử dụng get_zero_position thay vì list comprehension
-    actions = []
-    if zero_i > 0: actions.append("up")
-    if zero_i < 2: actions.append("down")
-    if zero_j > 0: actions.append("left")
-    if zero_j < 2: actions.append("right")
-    return actions
+    zero_i, zero_j = get_zero_position(state)
+    return [
+        action for action, (di, dj) in [
+            ("up", (-1, 0)), ("down", (1, 0)), ("left", (0, -1)), ("right", (0, 1))
+        ] if 0 <= zero_i + di < 3 and 0 <= zero_j + dj < 3
+    ]
 
 def result(state, action):
-    neighbors = get_neighbors(state)  
+    neighbors = get_neighbors(state)
     for neighbor in neighbors:
-        if get_move_direction(state, neighbor) == action:  
+        if get_move_direction(state, neighbor) == action:
             return neighbor
-    return state 
+    return state
+
 def goal_test(state, goal):
     return state == goal
 
@@ -42,6 +42,7 @@ def or_search(state, goal, path, depth, max_depth):
         return []
     if state in path:
         return 'failure'
+    
     path = path.copy()
     path[state] = True
     for action in get_possible_actions(state):
@@ -54,55 +55,54 @@ def or_search(state, goal, path, depth, max_depth):
 def and_search(states, goal, path, depth, max_depth):
     path = path.copy()
     plans = {}
-    for s in states:
-        plan = or_search(s, goal, path, depth + 1, max_depth)
+    for state in states:
+        plan = or_search(state, goal, path, depth + 1, max_depth)
         if plan == 'failure':
             return 'failure'
-        plans[s] = plan
+        plans[state] = plan
     return plans
 
 def extract_path(solution, start, goal):
+    path = [start]
     if not solution:
-        return [start]
+        return path
     if isinstance(solution, list) and len(solution) == 2:
         action, and_plan = solution
-        result_states = results(start, action)
-        if result_states:
-            next_state = result_states[0]
-            subplan = and_plan.get(next_state, [])
-            return [start] + extract_path(subplan, next_state, goal)
-    return [start]
+        next_state = results(start, action)[0]
+        if next_state in and_plan:
+            return path + extract_path(and_plan[next_state], next_state, goal)
+    return path
 
 def no_observation_belief_state_search(initial_states, goal_states, max_steps=500):
-    initial_belief = set(initial_states)
+    belief = set(initial_states)
     goal_set = set(goal_states)
-    queue = deque([(initial_belief, [], 0)])
-    visited = {tuple(sorted(initial_belief))}
+    queue = deque([(belief, [], 0)])
+    visited = {tuple(sorted(belief))}
     all_paths = []
-    rep0 = next(iter(initial_belief))
+    representative_state = next(iter(belief))
 
     while queue and len(all_paths) < max_steps:
-        belief, actions, cost = queue.popleft()
-        hit = next((s for s in belief if s in goal_set), None)
-        if hit:
-            path = [rep0]
-            for a in actions:
-                path.append(result(path[-1], a))
+        current_belief, actions, cost = queue.popleft()
+        goal_hit = next((s for s in current_belief if s in goal_set), None)
+        if goal_hit:
+            path = [representative_state]
+            for action in actions:
+                path.append(result(path[-1], action))
             return path, calculate_costs(path), all_paths
 
-        common_actions = set.intersection(*[set(get_possible_actions(s)) for s in belief])
+        common_actions = set.intersection(*[set(get_possible_actions(s)) for s in current_belief])
         for action in common_actions:
-            pred = {result(s, action) for s in belief}
-            key = tuple(sorted(pred))
-            if key not in visited:
-                visited.add(key)
+            next_belief = {result(s, action) for s in current_belief}
+            belief_key = tuple(sorted(next_belief))
+            if belief_key not in visited:
+                visited.add(belief_key)
                 new_cost = cost + MOVE_COSTS.get(action, 1)
                 new_actions = actions + [action]
-                queue.append((pred, new_actions, new_cost))
-                rep_path = [rep0]
+                queue.append((next_belief, new_actions, new_cost))
+                path = [representative_state]
                 for a in new_actions:
-                    rep_path.append(result(rep_path[-1], a))
-                all_paths.append((rep_path, new_cost))
+                    path.append(result(path[-1], a))
+                all_paths.append((path, new_cost))
 
     return None, None, all_paths
 
@@ -112,16 +112,16 @@ def partially_observable_search(visible_state, initial_states, goal_states, max_
     blanks = [(i, j) for i in range(3) for j in range(3) if visible_state[i][j] is None]
 
     initial_belief = set()
-    for s in initial_states:
-        if all(visible_state[i][j] is None or s[i][j] == visible_state[i][j]
+    for state in initial_states:
+        if all(visible_state[i][j] is None or state[i][j] == visible_state[i][j]
                for i in range(3) for j in range(3)):
-            initial_belief.add(s)
+            initial_belief.add(state)
 
-    if not initial_belief:
+    if not initial_belief and len(missing) <= 4:
         for perm in itertools.permutations(missing):
             board = [[visible_state[i][j] for j in range(3)] for i in range(3)]
-            for (i, j), v in zip(blanks, perm):
-                board[i][j] = v
-            initial_belief.add(tuple(tuple(r) for r in board))
+            for (i, j), value in zip(blanks, perm):
+                board[i][j] = value
+            initial_belief.add(tuple(tuple(row) for row in board))
 
     return no_observation_belief_state_search(initial_belief, goal_states, max_steps)
