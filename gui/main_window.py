@@ -5,12 +5,12 @@ from .control_panel import ControlPanel
 from .puzzle_frame import PuzzleFrame
 from constants import START_STATE, GOAL_STATE, WIDTH, HEIGHT
 from algorithms.uninformed import bfs, dfs, ucs, ids
-from algorithms.informed import greedy, astar, ida_star
+from algorithms.informed import greedy, astar, ida_star,heuristic
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.constraint import solve as solve
 from algorithms.complex import and_or_graph_search, no_observation_belief_state_search, partially_observable_search
-from algorithms.utils import generate_random_state
-from algorithms.Reforcement_learning import QLearning
+from algorithms.utils import generate_random_state,calculate_costs
+from algorithms.Reforcement_learning import q_learning
 from .theme import COLORS, apply_style
 
 class MainWindow(tk.Tk):
@@ -61,7 +61,6 @@ class MainWindow(tk.Tk):
         if result['solution']:
             path = result['path']
             if path:
-                from algorithms.utils import calculate_costs
                 costs = calculate_costs(path)
                 all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
                 return path, costs, all_paths
@@ -76,7 +75,6 @@ class MainWindow(tk.Tk):
         if result['solution']:
             path = result['path']
             if path:
-                from algorithms.utils import calculate_costs
                 costs = calculate_costs(path)
                 all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
                 return path, costs, all_paths
@@ -91,7 +89,6 @@ class MainWindow(tk.Tk):
         if result['solution']:
             path = result['path']
             if path:
-                from algorithms.utils import calculate_costs
                 costs = calculate_costs(path)
                 all_paths = [(path[:i+1], costs[i]) for i in range(len(path))]
                 return path, costs, all_paths
@@ -295,7 +292,7 @@ class MainWindow(tk.Tk):
         input_label.pack(side=tk.LEFT, padx=5)
         self.array_input = tk.Entry(self.input_frame, width=15)
         self.array_input.pack(side=tk.LEFT, padx=5)
-        self.array_input.insert(0, "2,6,5,0,8,7,4,3,1")  
+        self.array_input.insert(0, "1,2,3,4,5,6,0,7,8")  
         apply_button = tk.Button(
             self.input_frame,
             text="Apply Array",
@@ -574,64 +571,19 @@ class MainWindow(tk.Tk):
             self.control_panel.update_info(info)
             self.control_panel.update_paths(self.all_paths if self.all_paths else [])
     
-    def q_learning_adapter(self, initial_state, goal_state):
-        # Tạo instance của QLearning
-        agent = QLearning()
-        
-        # Tạo môi trường giả lập
-        class PuzzleEnvironment:
-            def __init__(self, initial_state, goal_state):
-                self.state = initial_state
-                self.goal_state = goal_state
-                
-            def reset(self):
-                self.state = initial_state
-                return self.state
-                
-            def get_possible_actions(self):
-                from algorithms.utils import get_neighbors
-                return get_neighbors(self.state)
-                
-            def step(self, action):
-                self.state = action
-                reward = -1 if self.state != self.goal_state else 100
-                done = self.state == self.goal_state
-                return self.state, reward, done
-        
-        env = PuzzleEnvironment(initial_state, goal_state)
-        
-        # Huấn luyện agent
-        agent.train(env, num_episodes=1000)
-        
-        # Tìm đường đi tốt nhất
-        path = [initial_state]
-        costs = [0]
-        all_paths = [(path[:], 0)]
-        current_state = initial_state
-        
-        while current_state != goal_state:
-            possible_actions = env.get_possible_actions()
-            if not possible_actions:
-                return None, None, all_paths
-                
-            action = agent.get_best_action(current_state, possible_actions)
-            current_state = action
-            path.append(current_state)
-            
-            # Tính toán chi phí
-            from algorithms.utils import get_move_direction
-            from constants import MOVE_COSTS
-            direction = get_move_direction(path[-2], current_state)
-            new_cost = costs[-1] + (MOVE_COSTS[direction] if direction else 0)
-            costs.append(new_cost)
-            all_paths.append((path[:], new_cost))
-            
-            # Kiểm tra vòng lặp vô hạn
-            if len(path) > 100:
-                return None, None, all_paths
-        
+    def q_learning_adapter(self, start_state, goal_state):
+        # nếu GUI cần theo dõi Q và cache riêng
+        distance_cache = {}
+        Q = {}
+        # gọi vào hàm q_learning chính
+        path, costs, all_paths = q_learning(
+            start_state, goal_state,
+            episodes=2000, alpha=0.1, gamma=0.9,
+            epsilon_start=1.0, epsilon_end=0.01,
+            max_steps=100,
+            Q=Q, distance_cache=distance_cache
+        )
         return path, costs, all_paths
-
     def handle_matrix_keypress(self, event, row, col, matrix_type):
         """Handle keyboard navigation in matrix entries"""
         entries = self.belief_matrix_entries if matrix_type == 'belief' else self.goal_matrix_entries
@@ -697,7 +649,6 @@ class MainWindow(tk.Tk):
                     entries[row][next_col].focus_set()
 
     def save_visible_part(self):
-        """Lưu phần nhìn thấy và khóa các ô đã nhập số từ 0-8"""
         # Kiểm tra và lưu các ô đã nhập số từ 0-8
         for i in range(3):
             for j in range(3):
@@ -713,10 +664,7 @@ class MainWindow(tk.Tk):
         self.save_visible_btn.config(state='disabled')
 
     def get_states_from_listbox(self, listbox):
-        """
-        Chuyển mỗi dòng trong listbox thành một state 3×3 tuple.
-        Ví dụ dòng "1,2,3,4,5,6,7,8,0" -> ((1,2,3),(4,5,6),(7,8,0))
-        """
+      
         states = []
         for line in listbox.get(0, tk.END):
             parts = [None if s.strip() == 'None' else int(s) for s in line.split(',')]
