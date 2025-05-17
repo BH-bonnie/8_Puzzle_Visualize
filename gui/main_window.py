@@ -8,8 +8,7 @@ from algorithms.uninformed import bfs, dfs, ucs, ids
 from algorithms.informed import greedy, astar, ida_star, heuristic
 from algorithms.local import simple_hill_climbing, stochastic_hill_climbing, simulated_annealing, beam_search, genetic_algorithm, steepest_ascent_hill_climbing
 from algorithms.constraint import solve as solve
-from algorithms.complex import and_or_graph_search
-from algorithms import no_observation_belief_state_search, partially_observable_search
+from algorithms.complex import and_or_graph_search,no_observation_belief_state_search, partially_observable_search
 from algorithms.utils import generate_random_state, calculate_costs
 from algorithms.Reforcement_learning import q_learning
 from .theme import COLORS, apply_style
