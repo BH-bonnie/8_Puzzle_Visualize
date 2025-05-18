@@ -26,11 +26,6 @@
 - **Trạng Thái Mục Tiêu**: `[1, 2, 3, 4, 5, 6, 7, 8, 0]`.
 - **Không Gian Trạng Thái**: Tập hợp tất cả các trạng thái có thể đạt được từ trạng thái ban đầu.
 - **Hành Động**: Di chuyển ô trống (0) lên, xuống, trái, hoặc phải.
-- **Hàm Chuyển Đổi**:
-  - Tìm vị trí ô trống.
-  - Kiểm tra tính hợp lệ của di chuyển.
-  - Hoán đổi ô trống với ô liền kề.
-  - Chuyển trạng thái thành tuple để lưu trữ.
 - **Hàm Chi Phí**: (lên: 1, xuống: 2, trái: 3, phải: 4).
 
 #### Thuật Toán
@@ -53,7 +48,13 @@
 
 #### Nhận Xét
 
-- DFS sinh ra quá nhiều không gian trạng thái, dẫn đến trường hợp phức tạp sẽ không giải được.
+- BFS đảm bảo tìm lời giải nhanh nhưng không tối ưu chi phí.
+
+- DFS dễ bị quá tải về không gian trạng thái sinh ra.
+
+- UCS tối ưu nếu chi phí khác nhau.
+
+- IDS là một cách tiết kiệm bộ nhớ hơn BFS nhưng vẫn đảm bảo tối ưu.
 
 ### 2.2. Các Thuật Toán Tìm Kiếm Có Thông Tin
 
@@ -80,7 +81,8 @@
 
 #### Nhận Xét
 
-- Greedy sinh ra ít trạng thái, giải nhanh nhưng chưa chắc ít bước nhất.
+- Greedy có thể nhanh nhưng không đảm bảo ra lời giải ngắn nhất.
+- A* rất hiệu quả 
 
 ### 2.3. Các Thuật Toán Tìm Kiếm Cục Bộ
 
@@ -189,6 +191,9 @@
 
 - Trả về đường đi từ trạng thái ban đầu đến mục tiêu, cùng số trạng thái đã duyệt. Nếu không tìm thấy, trả về danh sách rỗng.
 
+#### Nhận Xét
+- Không phù hợp với bày này vì phá vỡ cấu trúc 
+
 ### 2.6. Tìm Kiếm Trong Môi Trường Học Tăng Cường
 
 #### Thành Phần Chính
@@ -212,8 +217,8 @@
 - Trả về đường đi từ trạng thái ban đầu đến mục tiêu, cùng số trạng thái đã duyệt. Nếu không tìm thấy, trả về danh sách rỗng.
 
 #### Nhận Xét
+- Rất mất thời gian đi tìm đường
 
-- Q-Learning khả thi cho 8-Puzzle, đặc biệt trong môi trường không biết trước.
 ### 2.7. Bảng so sánh các thuật toán 
 - ![sosanh](./GIF/thongke.png)
 
